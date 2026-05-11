@@ -1,0 +1,27 @@
+[workspace]
+members = ["tartarus"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+repository = "https://github.com/the-lost-art-of-programming/tartarus"
+
+[workspace.dependencies]
+clap = { version = "4.6.1", features = ["derive", "env"] }
+directories = "5.0.1"
+reqwest = { version = "0.12.28", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+thiserror = "1.0.69"
+toml = "0.8.23"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+uuid = { version = "1.23.1", features = ["v4"] }
+virt = { version = "0.4.3", features = ["qemu"] }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
