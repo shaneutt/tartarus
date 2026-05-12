@@ -67,9 +67,24 @@ const DEFAULT_DISK_GROW_INCREMENT_GIB: u32 = 100;
 /// Minimum overlay virtual size, in GiB.
 const MIN_DISK_VIRTUAL_SIZE_GIB: u32 = 8;
 
-// ---------------------------------------------------------------------------
+/// Default per-session memory, in MiB (4 GiB).
+const DEFAULT_VM_MEMORY_MIB: u32 = 4_096; // 4 GiB
+
+/// Minimum per-session memory, in MiB.
+const MIN_VM_MEMORY_MIB: u32 = 512;
+
+/// Default per-session vCPU count.
+const DEFAULT_VM_VCPUS: u32 = 2;
+
+/// Minimum per-session vCPU count.
+const MIN_VM_VCPUS: u32 = 1;
+
+/// Maximum per-session vCPU count.
+const MAX_VM_VCPUS: u32 = 64;
+
+// -----------------------------------------------------------------------------
 // Configuration Types
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
 /// All configuration errors.
 #[derive(Debug, thiserror::Error)]
@@ -224,6 +239,12 @@ pub struct Config {
 
     /// Username inside the guest.
     pub user_username: Option<String>,
+
+    /// Per-session memory, in MiB.
+    pub vm_memory_mib: u32,
+
+    /// Per-session vCPU count.
+    pub vm_vcpus: u32,
 }
 
 impl fmt::Debug for Config {
@@ -253,6 +274,8 @@ impl fmt::Debug for Config {
             .field("user_gid", &self.user_gid)
             .field("user_uid", &self.user_uid)
             .field("user_username", &self.user_username)
+            .field("vm_memory_mib", &self.vm_memory_mib)
+            .field("vm_vcpus", &self.vm_vcpus)
             .finish()
     }
 }
@@ -268,6 +291,7 @@ impl Config {
         let network = file.network;
         let rust = file.rust;
         let user = file.user;
+        let vm = file.vm;
 
         Self {
             base_default_repo: cli.base_default_repo.or(file.base.default_repo),
@@ -309,6 +333,8 @@ impl Config {
             user_gid: user.gid,
             user_uid: user.uid,
             user_username: user.username,
+            vm_memory_mib: cli.vm_memory_mib.or(vm.memory_mib).unwrap_or(DEFAULT_VM_MEMORY_MIB),
+            vm_vcpus: cli.vm_vcpus.or(vm.vcpus).unwrap_or(DEFAULT_VM_VCPUS),
         }
     }
 
@@ -332,6 +358,22 @@ impl Config {
 
         if self.disk_grow_increment_gib == 0 {
             return Err(ConfigError::Invalid("[disk] grow_increment_gib must be a positive integer".to_owned()).into());
+        }
+
+        if self.vm_memory_mib < MIN_VM_MEMORY_MIB {
+            return Err(ConfigError::Invalid(format!(
+                "[vm] memory_mib = {} is below the minimum of {MIN_VM_MEMORY_MIB} MiB",
+                self.vm_memory_mib,
+            ))
+            .into());
+        }
+
+        if self.vm_vcpus < MIN_VM_VCPUS || self.vm_vcpus > MAX_VM_VCPUS {
+            return Err(ConfigError::Invalid(format!(
+                "[vm] vcpus = {} must be between {MIN_VM_VCPUS} and {MAX_VM_VCPUS}",
+                self.vm_vcpus,
+            ))
+            .into());
         }
 
         validate_user_identity(self)?;
@@ -380,6 +422,9 @@ pub struct FileConfig {
 
     /// `[user]` section.
     pub user: UserSection,
+
+    /// `[vm]` section.
+    pub vm: VmSection,
 }
 
 impl fmt::Debug for FileConfig {
@@ -392,6 +437,7 @@ impl fmt::Debug for FileConfig {
             .field("network", &self.network)
             .field("rust", &self.rust)
             .field("user", &self.user)
+            .field("vm", &self.vm)
             .finish()
     }
 }
@@ -530,6 +576,17 @@ pub struct DiskSection {
     pub virtual_size_gib: Option<u32>,
 }
 
+/// `[vm]` config section: per-session compute resources.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct VmSection {
+    /// Session memory in MiB.
+    pub memory_mib: Option<u32>,
+
+    /// Session vCPU count.
+    pub vcpus: Option<u32>,
+}
+
 /// `[network]` config section.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default, deny_unknown_fields)]
@@ -585,6 +642,12 @@ pub struct CliOverrides {
 
     /// Override for `[network] uri`.
     pub network_uri: Option<String>,
+
+    /// Override for `[vm] memory_mib`.
+    pub vm_memory_mib: Option<u32>,
+
+    /// Override for `[vm] vcpus`.
+    pub vm_vcpus: Option<u32>,
 }
 
 impl fmt::Debug for CliOverrides {
@@ -608,6 +671,8 @@ impl fmt::Debug for CliOverrides {
             .field("disk_virtual_size_gib", &self.disk_virtual_size_gib)
             .field("github_token", &self.github_token.as_ref().map(|_| "[REDACTED]"))
             .field("network_uri", &self.network_uri)
+            .field("vm_memory_mib", &self.vm_memory_mib)
+            .field("vm_vcpus", &self.vm_vcpus)
             .finish()
     }
 }
@@ -1359,6 +1424,10 @@ mod tests {
                 gid: Some(1000),
                 uid: Some(1000),
                 username: Some("alice".to_owned()),
+            },
+            vm: VmSection {
+                memory_mib: Some(8_192),
+                vcpus: Some(4),
             },
         }
     }

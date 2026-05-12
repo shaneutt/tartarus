@@ -153,6 +153,16 @@ pub enum Command {
         #[arg(long, value_name = "auto|BDF")]
         gpu: Option<String>,
 
+        /// Session memory in MiB. Overrides `[vm] memory_mib` in
+        /// `config.toml`. Also reads `TARTARUS_MEMORY`.
+        #[arg(long, value_name = "MIB", env = "TARTARUS_MEMORY")]
+        memory: Option<u32>,
+
+        /// Session vCPU count. Overrides `[vm] vcpus` in
+        /// `config.toml`. Also reads `TARTARUS_VCPUS`.
+        #[arg(long, value_name = "COUNT", env = "TARTARUS_VCPUS")]
+        vcpus: Option<u32>,
+
         /// Run this single session under `qemu:///system` (root libvirtd)
         /// instead of `qemu:///session`.
         ///
@@ -203,6 +213,24 @@ pub enum Command {
     Update {
         /// Alias or UUID identifying the session.
         target: String,
+    },
+
+    /// Change compute resources on an existing session.
+    ///
+    /// For stopped sessions the domain XML is regenerated with the
+    /// new values. For running sessions the change is applied live
+    /// (best-effort) and persisted for the next boot.
+    Set {
+        /// Alias or UUID identifying the session.
+        target: String,
+
+        /// New memory in MiB.
+        #[arg(long, value_name = "MIB")]
+        memory: Option<u32>,
+
+        /// New vCPU count.
+        #[arg(long, value_name = "COUNT")]
+        vcpus: Option<u32>,
     },
 }
 
@@ -361,6 +389,7 @@ pub fn run(cli: Cli, config: Option<Config>) -> Result<()> {
                 repos: repo,
             },
         ),
+        Command::Set { target, memory, vcpus } => dispatch_set(config, &target, memory, vcpus),
         Command::Ssh { target, ssh_args } => dispatch_ssh(config, target, ssh_args),
         Command::Stop { target } => dispatch_stop(config, &target),
         Command::Update { target } => dispatch_update(config, &target),
@@ -505,6 +534,20 @@ fn dispatch_host_gpu_status(bdf: Option<&str>) -> Result<()> {
     Ok(())
 }
 
+/// Dispatch the `tartarus set <alias|uuid>` subcommand.
+fn dispatch_set(config: Option<Config>, target: &str, memory: Option<u32>, vcpus: Option<u32>) -> Result<()> {
+    let config = require_config(config)?;
+    let request = crate::session::set::SetRequest { memory, vcpus };
+    let outcome = crate::session::set::run(&config, target, &request)?;
+    println!(
+        "session {uuid} updated: memory={mem}M vcpus={cpu}",
+        uuid = outcome.uuid,
+        mem = outcome.memory_mib,
+        cpu = outcome.vcpus,
+    );
+    Ok(())
+}
+
 /// Dispatch the `tartarus update <alias|uuid>` subcommand.
 fn dispatch_update(config: Option<Config>, target: &str) -> Result<()> {
     let config = require_config(config)?;
@@ -524,9 +567,13 @@ pub fn cli_overrides(cli: &Cli) -> CliOverrides {
         env,
         repo,
         default_repo,
+        memory,
+        vcpus,
         ..
     } = &cli.command
     {
+        overrides.vm_memory_mib = *memory;
+        overrides.vm_vcpus = *vcpus;
         if !env.is_empty() {
             overrides.base_envs = Some(env.clone());
         }
