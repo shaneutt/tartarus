@@ -1,0 +1,16 @@
+# tartarus-fstrim.service — fstrim on shutdown to keep overlays sparse.
+
+[Unit]
+Description=Tartarus pre-shutdown fstrim
+DefaultDependencies=no
+After=local-fs.target
+Before=shutdown.target umount.target
+Conflicts=reboot.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/tartarus-fstrim.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=shutdown.target

@@ -1,0 +1,26 @@
+# tartarus-claude@.service — tmux + claude on tty1 for the named user.
+
+[Unit]
+Description=Tartarus Claude session for %i on tty1
+After=tartarus-bootstrap.service getty@tty1.service
+Wants=tartarus-bootstrap.service
+Conflicts=getty@tty1.service
+
+[Service]
+Type=simple
+User=%i
+Group=%i
+WorkingDirectory=/home/%i
+StandardInput=tty
+StandardOutput=tty
+StandardError=journal
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+Environment=TERM=linux
+ExecStart=/usr/local/bin/tartarus-claude.sh
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

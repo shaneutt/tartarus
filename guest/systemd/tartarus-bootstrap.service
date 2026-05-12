@@ -1,0 +1,19 @@
+# tartarus-bootstrap.service — first-boot bootstrap.
+# No User= by default; the seed renderer injects a drop-in with the
+# per-session user. See tartarus/src/seed/render.rs.
+
+[Unit]
+Description=Tartarus first-boot bootstrap (gh auth, repo clone, claude trigger)
+After=cloud-final.service network-online.target
+Wants=cloud-final.service network-online.target
+ConditionPathExists=!/var/lib/tartarus/bootstrap.done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/tartarus-bootstrap.sh
+ExecStartPost=/bin/mkdir -p /var/lib/tartarus
+ExecStartPost=/bin/touch /var/lib/tartarus/bootstrap.done
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

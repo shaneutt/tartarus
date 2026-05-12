@@ -1,0 +1,13 @@
+# tartarus-grow.timer — periodic disk-watermark check.
+
+[Unit]
+Description=Tartarus periodic disk-grow watermark check
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+Persistent=true
+Unit=tartarus-grow.service
+
+[Install]
+WantedBy=timers.target

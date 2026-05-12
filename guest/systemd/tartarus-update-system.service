@@ -1,0 +1,13 @@
+# tartarus-update-system.service — root-only system package upgrade.
+# Only dnf runs here; all user-facing update steps stay unprivileged.
+
+[Unit]
+Description=Tartarus system package upgrade (dnf upgrade --refresh -y)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/bin/dnf upgrade --refresh -y
+TimeoutStartSec=30min

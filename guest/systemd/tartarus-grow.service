@@ -1,0 +1,9 @@
+# tartarus-grow.service — disk-grow watermark check.
+
+[Unit]
+Description=Tartarus disk-grow watermark check
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/tartarus-grow.sh
+User=root
