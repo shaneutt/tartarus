@@ -10,9 +10,9 @@ use crate::{
     session::metadata::{METADATA_FILE_NAME, Metadata},
 };
 
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // Constants
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
 /// Length of the UUID prefix shown in the table.
 const UUID_PREFIX_LEN: usize = 8;
@@ -32,9 +32,15 @@ const ENVS_COL_WIDTH: usize = 22;
 /// Width of the size column.
 const SIZE_COL_WIDTH: usize = 6;
 
-// ---------------------------------------------------------------------------
+/// Width of the memory column.
+const MEM_COL_WIDTH: usize = 7;
+
+/// Width of the CPU column.
+const CPU_COL_WIDTH: usize = 4;
+
+// -----------------------------------------------------------------------------
 // ListEntry
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
 /// One row of the session list table.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -45,8 +51,14 @@ pub struct ListEntry {
     /// Base image filename.
     pub base: String,
 
+    /// vCPU count as a string, or `?` if unknown.
+    pub cpu: String,
+
     /// Comma-joined envs (e.g. `rust,go,python`).
     pub envs: String,
+
+    /// Memory as `<mib>M`, or `?` if unknown.
+    pub mem: String,
 
     /// `yes` / `no` rendering of the persist flag.
     pub persist: String,
@@ -86,19 +98,23 @@ pub fn render(entries: &[ListEntry]) -> String {
 
     let mut out = String::new();
     out.push_str(&format!(
-        "{a:<aw$}  {u:<uw$}  {s:<sw$}  {b:<bw$}  {e:<ew$}  {z:<zw$}  PERSIST\n",
+        "{a:<aw$}  {u:<uw$}  {s:<sw$}  {b:<bw$}  {e:<ew$}  {z:<zw$}  {m:<mw$}  {c:<cw$}  PERSIST\n",
         a = "ALIAS",
         u = "UUID",
         s = "STATUS",
         b = "BASE",
         e = "ENVS",
         z = "SIZE",
+        m = "MEM",
+        c = "CPU",
         aw = ALIAS_COL_WIDTH,
         uw = UUID_PREFIX_LEN,
         sw = STATUS_COL_WIDTH,
         bw = BASE_COL_WIDTH,
         ew = ENVS_COL_WIDTH,
         zw = SIZE_COL_WIDTH,
+        mw = MEM_COL_WIDTH,
+        cw = CPU_COL_WIDTH,
     ));
     for row in entries {
         out.push_str(&format_row(row));
@@ -113,20 +129,22 @@ pub fn run(config: &Config) -> Result<String> {
     Ok(render(&entries))
 }
 
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // Table Rendering
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
 /// Format one [`ListEntry`] row into the table layout.
 fn format_row(entry: &ListEntry) -> String {
     format!(
-        "{a:<aw$}  {u:<uw$}  {s:<sw$}  {b:<bw$}  {e:<ew$}  {z:<zw$}  {p}\n",
+        "{a:<aw$}  {u:<uw$}  {s:<sw$}  {b:<bw$}  {e:<ew$}  {z:<zw$}  {m:<mw$}  {c:<cw$}  {p}\n",
         a = entry.alias,
         u = entry.uuid_short,
         s = entry.status,
         b = entry.base,
         e = entry.envs,
         z = entry.size,
+        m = entry.mem,
+        c = entry.cpu,
         p = entry.persist,
         aw = ALIAS_COL_WIDTH,
         uw = UUID_PREFIX_LEN,
@@ -134,6 +152,8 @@ fn format_row(entry: &ListEntry) -> String {
         bw = BASE_COL_WIDTH,
         ew = ENVS_COL_WIDTH,
         zw = SIZE_COL_WIDTH,
+        mw = MEM_COL_WIDTH,
+        cw = CPU_COL_WIDTH,
     )
 }
 
@@ -214,12 +234,24 @@ fn build_entry(metadata: &Metadata, status: Option<&String>) -> ListEntry {
     } else {
         format!("{n}G", n = metadata.overlay_virtual_gib)
     };
+    let mem = if metadata.memory_mib == 0 {
+        "?".to_owned()
+    } else {
+        format!("{n}M", n = metadata.memory_mib)
+    };
+    let cpu = if metadata.vcpus == 0 {
+        "?".to_owned()
+    } else {
+        metadata.vcpus.to_string()
+    };
     let status = status.cloned().unwrap_or_else(|| "unknown".to_owned());
 
     ListEntry {
         alias,
         base: metadata.base.clone(),
+        cpu,
         envs,
+        mem,
         persist,
         size,
         status,
@@ -227,9 +259,9 @@ fn build_entry(metadata: &Metadata, status: Option<&String>) -> ListEntry {
     }
 }
 
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // Tests
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -242,7 +274,9 @@ mod tests {
             ListEntry {
                 alias: "(unnamed)".to_owned(),
                 base: "fedora-41-2026-05-01.qcow2".to_owned(),
+                cpu: "2".to_owned(),
                 envs: "rust,go".to_owned(),
+                mem: "4096M".to_owned(),
                 persist: "yes".to_owned(),
                 size: "100G".to_owned(),
                 status: "running".to_owned(),
@@ -251,7 +285,9 @@ mod tests {
             ListEntry {
                 alias: "fix-bug".to_owned(),
                 base: "fedora-41-2026-05-01.qcow2".to_owned(),
+                cpu: "4".to_owned(),
                 envs: "python".to_owned(),
+                mem: "8192M".to_owned(),
                 persist: "no".to_owned(),
                 size: "200G".to_owned(),
                 status: "shutoff".to_owned(),
@@ -263,11 +299,14 @@ mod tests {
 
         assert!(rendered.contains("ALIAS"), "header should appear, got: {rendered}");
         assert!(rendered.contains("SIZE"), "SIZE header should appear, got: {rendered}");
+        assert!(rendered.contains("MEM"), "MEM header should appear, got: {rendered}");
+        assert!(rendered.contains("CPU"), "CPU header should appear, got: {rendered}");
         assert!(
             rendered.contains("PERSIST"),
             "PERSIST column should appear, got: {rendered}"
         );
         assert!(rendered.contains("100G"), "size row should appear, got: {rendered}");
+        assert!(rendered.contains("4096M"), "memory row should appear, got: {rendered}");
         assert!(rendered.contains("(unnamed)"), "unnamed row should appear");
         assert!(rendered.contains("fix-bug"), "alias row should appear");
         assert!(rendered.contains("shutoff"), "shutoff status should appear");
@@ -348,9 +387,9 @@ mod tests {
         );
     }
 
-    // ---------------------------------------------------------------------------
+    // -----------------------------------------------------------------------------
     // Test Utilities
-    // ---------------------------------------------------------------------------
+    // -----------------------------------------------------------------------------
 
     fn sample_metadata(alias: Option<String>) -> Metadata {
         Metadata {
@@ -361,6 +400,7 @@ mod tests {
             envs: vec!["rust".to_owned()],
             gpu_borrow: None,
             last_attached_at: None,
+            memory_mib: 4_096,
             overlay_virtual_gib: 100,
             persist: true,
             remote_url: None,
@@ -370,6 +410,7 @@ mod tests {
             }],
             ssh_port: None,
             uuid: "11111111-2222-3333-4444-555555555555".to_owned(),
+            vcpus: 2,
         }
     }
 }

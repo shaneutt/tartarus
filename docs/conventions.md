@@ -145,9 +145,9 @@ is scaffolded.
   `// Validation`, `// Utility Functions`, `// Tests`
   rather than `// Public API` or `// Private Utilities`.
   ```rust
-  // -----------------------------------------------------------
+  // -----------------------------------------------------------------------------
   // Section Name
-  // -----------------------------------------------------------
+  // -----------------------------------------------------------------------------
   ```
 - **No re-export-only files.** If a file exists solely to
   `pub use` items from another crate or module, inline

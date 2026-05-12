@@ -8,9 +8,9 @@ use crate::{
     host::{connect::Connection, error::HostError},
 };
 
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // Constants
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
 /// Polling interval while waiting for graceful shutdown.
 const SHUTDOWN_POLL_INTERVAL_MS: u64 = 200;
@@ -20,12 +20,6 @@ const DEFAULT_MEMORY_MIB: u32 = 512;
 
 /// Default vCPU count for a trivial domain.
 const DEFAULT_VCPUS: u32 = 1;
-
-/// Default memory (MiB) for a session domain.
-const SESSION_MEMORY_MIB: u32 = 4_096;
-
-/// Default vCPU count for a session domain.
-const SESSION_VCPUS: u32 = 2;
 
 /// Canonical `qemu-guest-agent` channel name.
 const QEMU_GA_CHANNEL: &str = "org.qemu.guest_agent.0";
@@ -45,9 +39,9 @@ const OS_TYPE: &str = "hvm";
 /// Guest architecture.
 const OS_ARCH: &str = "x86_64";
 
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // Domain Lifecycle
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
 /// Caller-supplied parameters for a Tartarus-managed domain.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -187,22 +181,23 @@ pub struct SessionDomainSpec {
 }
 
 impl SessionDomainSpec {
-    /// Build a [`SessionDomainSpec`] with default memory and vCPU
-    /// counts.
+    /// Build a [`SessionDomainSpec`] with the given compute resources.
     pub fn new(
         name: impl Into<String>,
         overlay: impl Into<std::path::PathBuf>,
         seed_iso: impl Into<std::path::PathBuf>,
+        memory_mib: u32,
+        vcpus: u32,
     ) -> Self {
         Self {
             name: name.into(),
             gpu_passthrough: None,
             gpu_quirks: crate::gpu::quirks::VendorQuirks::default(),
-            memory_mib: SESSION_MEMORY_MIB,
+            memory_mib,
             overlay: overlay.into(),
             seed_iso: seed_iso.into(),
             ssh_hostfwd_port: None,
-            vcpus: SESSION_VCPUS,
+            vcpus,
         }
     }
 
@@ -458,9 +453,9 @@ pub fn define_session(connection: &Connection, spec: &SessionDomainSpec) -> Resu
     Ok(domain)
 }
 
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // XML Construction
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
 /// Push the `<domain>` header, OS, features, and CPU sections.
 fn push_session_header(
@@ -641,9 +636,9 @@ fn xml_escape(input: &str) -> String {
     out
 }
 
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // Tests
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -827,23 +822,17 @@ mod tests {
     }
 
     #[test]
-    fn session_spec_uses_documented_defaults() {
-        let spec = SessionDomainSpec::new("session-test", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso");
+    fn session_spec_passes_through_memory_and_vcpus() {
+        let spec = SessionDomainSpec::new("session-test", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso", 8_192, 4);
 
         assert_eq!(spec.name, "session-test", "name should round-trip");
-        assert_eq!(
-            spec.memory_mib, SESSION_MEMORY_MIB,
-            "session spec should use the documented session memory default",
-        );
-        assert_eq!(
-            spec.vcpus, SESSION_VCPUS,
-            "session spec should use the documented session vcpu default",
-        );
+        assert_eq!(spec.memory_mib, 8_192, "memory_mib should round-trip");
+        assert_eq!(spec.vcpus, 4, "vcpus should round-trip");
     }
 
     #[test]
     fn session_xml_attaches_overlay_as_virtio_vda() {
-        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso");
+        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso", 4_096, 2);
         let xml = spec.to_xml();
 
         assert!(
@@ -862,7 +851,7 @@ mod tests {
 
     #[test]
     fn session_xml_attaches_seed_iso_as_readonly_cdrom() {
-        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso");
+        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso", 4_096, 2);
         let xml = spec.to_xml();
 
         assert!(
@@ -881,7 +870,7 @@ mod tests {
 
     #[test]
     fn session_xml_includes_required_extra_devices() {
-        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso");
+        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso", 4_096, 2);
         let xml = spec.to_xml();
 
         assert!(
@@ -904,7 +893,7 @@ mod tests {
 
     #[test]
     fn session_xml_omits_hostdev_when_no_gpu_borrowed() {
-        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso");
+        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso", 4_096, 2);
         let xml = spec.to_xml();
 
         assert!(
@@ -916,7 +905,7 @@ mod tests {
     #[test]
     fn session_xml_emits_hostdev_with_managed_no_when_gpu_borrowed() {
         let address: crate::gpu::PciAddress = "0000:01:00.0".parse().expect("parse");
-        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso")
+        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso", 4_096, 2)
             .with_gpu(address, crate::gpu::quirks::VendorQuirks::default());
         let xml = spec.to_xml();
 
@@ -936,7 +925,8 @@ mod tests {
         let quirks = crate::gpu::quirks::VendorQuirks {
             apply_nvidia_hide_kvm: true,
         };
-        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso").with_gpu(address, quirks);
+        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso", 4_096, 2)
+            .with_gpu(address, quirks);
         let xml = spec.to_xml();
 
         assert!(
@@ -956,7 +946,7 @@ mod tests {
     #[test]
     fn session_xml_omits_nvidia_quirk_when_inactive() {
         let address: crate::gpu::PciAddress = "0000:01:00.0".parse().expect("parse");
-        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso")
+        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso", 4_096, 2)
             .with_gpu(address, crate::gpu::quirks::VendorQuirks::default());
         let xml = spec.to_xml();
 
@@ -968,7 +958,7 @@ mod tests {
 
     #[test]
     fn session_xml_carries_qemu_guest_agent_channel() {
-        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso");
+        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso", 4_096, 2);
         let xml = spec.to_xml();
 
         assert!(

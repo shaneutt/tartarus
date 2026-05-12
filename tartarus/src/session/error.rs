@@ -2,9 +2,9 @@
 
 use std::path::PathBuf;
 
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // SessionError
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
 /// Failure modes specific to session identity, metadata, and lifecycle.
 #[derive(Debug, thiserror::Error)]
@@ -56,6 +56,10 @@ pub enum SessionError {
     #[error("no GitHub credentials configured. hint: run `tartarus auth init` to set them up.")]
     MissingCredentials,
 
+    /// `tartarus set` called without `--memory` or `--vcpus`.
+    #[error("at least one of --memory or --vcpus must be specified")]
+    MissingSetField,
+
     /// Schema version in `metadata.json` is unsupported.
     #[error("session metadata version {version} is not supported (loader supports v1 and newer)")]
     MetadataVersion {
@@ -86,6 +90,22 @@ pub enum SessionError {
     NotFound {
         /// Identifier the user supplied.
         target: String,
+    },
+
+    /// `tartarus set` value is outside the valid range.
+    #[error("{field} = {value} is outside the valid range ({min}..={max})")]
+    SetOutOfRange {
+        /// Name of the field that was out of range.
+        field: &'static str,
+
+        /// Value the user supplied.
+        value: u32,
+
+        /// Minimum allowed value.
+        min: u32,
+
+        /// Maximum allowed value.
+        max: u32,
     },
 
     /// `ssh-keygen` failed during per-session keypair generation.

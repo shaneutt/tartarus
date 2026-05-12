@@ -18,9 +18,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{error::Result, seed::input::RepoSpec, session::error::SessionError};
 
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // Constants
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
 /// File name of the per-session metadata document.
 pub const METADATA_FILE_NAME: &str = "metadata.json";
@@ -39,9 +39,9 @@ const METADATA_FILE_MODE: u32 = 0o600;
 /// Counter feeding the per-process suffix on temp metadata files.
 static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // Metadata
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
 /// Persisted per-session metadata.
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
@@ -63,6 +63,11 @@ pub struct Metadata {
 
     /// Most recent attach timestamp, or `None`.
     pub last_attached_at: Option<String>,
+
+    /// Session memory in MiB. `0` means the field was absent
+    /// (pre-vm-config metadata).
+    #[serde(default)]
+    pub memory_mib: u32,
 
     /// Overlay virtual size in GiB. `0` means the field was absent
     /// (pre-P10 metadata); callers should fall back to `qemu-img info`.
@@ -90,6 +95,11 @@ pub struct Metadata {
 
     /// Session UUID (matches the parent directory under `by-uuid/`).
     pub uuid: String,
+
+    /// Session vCPU count. `0` means the field was absent
+    /// (pre-vm-config metadata).
+    #[serde(default)]
+    pub vcpus: u32,
 }
 
 /// Persisted form of a GPU borrow, serialised as strings for JSON.
@@ -176,6 +186,9 @@ pub struct FreshFields {
     /// Programming envs requested at session start.
     pub envs: Vec<String>,
 
+    /// Session memory in MiB.
+    pub memory_mib: u32,
+
     /// Per-session overlay virtual size in GiB at creation time.
     pub overlay_virtual_gib: u32,
 
@@ -187,6 +200,9 @@ pub struct FreshFields {
 
     /// Session UUID.
     pub uuid: String,
+
+    /// Session vCPU count.
+    pub vcpus: u32,
 }
 
 /// Build a fresh [`Metadata`] for a newly-created session.
@@ -199,12 +215,14 @@ pub fn fresh(fields: FreshFields) -> Metadata {
         envs: fields.envs,
         gpu_borrow: None,
         last_attached_at: None,
+        memory_mib: fields.memory_mib,
         overlay_virtual_gib: fields.overlay_virtual_gib,
         persist: fields.persist,
         remote_url: None,
         repos: fields.repos,
         ssh_port: None,
         uuid: fields.uuid,
+        vcpus: fields.vcpus,
     }
 }
 
@@ -282,9 +300,9 @@ fn sync_parent_dir(path: &Path) -> Result<()> {
     Ok(())
 }
 
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // Tests
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -370,6 +388,7 @@ mod tests {
             alias: Some("name".to_owned()),
             base: "fedora-41-2026-05-01.qcow2".to_owned(),
             envs: vec!["rust".to_owned()],
+            memory_mib: 4_096,
             overlay_virtual_gib: 100,
             persist: true,
             repos: vec![RepoSpec {
@@ -377,6 +396,7 @@ mod tests {
                 default: true,
             }],
             uuid: "abcd".to_owned(),
+            vcpus: 2,
         });
 
         assert_eq!(
@@ -469,9 +489,9 @@ mod tests {
         assert_eq!(&s[10..11], "T", "date-time separator at index 10, got: {s}");
     }
 
-    // ---------------------------------------------------------------------------
+    // -----------------------------------------------------------------------------
     // Test Utilities
-    // ---------------------------------------------------------------------------
+    // -----------------------------------------------------------------------------
 
     fn sample_metadata() -> Metadata {
         Metadata {
@@ -482,6 +502,7 @@ mod tests {
             envs: vec!["rust".to_owned(), "go".to_owned()],
             gpu_borrow: None,
             last_attached_at: None,
+            memory_mib: 4_096,
             overlay_virtual_gib: 100,
             persist: true,
             remote_url: None,
@@ -491,6 +512,7 @@ mod tests {
             }],
             ssh_port: None,
             uuid: "11111111-2222-3333-4444-555555555555".to_owned(),
+            vcpus: 2,
         }
     }
 

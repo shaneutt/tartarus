@@ -18,6 +18,7 @@ pub mod rename;
 pub mod resume;
 pub mod run;
 pub mod run_mode;
+pub mod set;
 pub mod ssh;
 pub mod ssh_attach;
 pub mod ssh_port;

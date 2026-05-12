@@ -34,9 +34,9 @@ use crate::{
     },
 };
 
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // Constants
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
 /// File name of the persisted libvirt domain XML inside the session dir.
 pub const DOMAIN_XML_FILE_NAME: &str = "domain.xml";
@@ -46,9 +46,9 @@ pub const DOMAIN_XML_FILE_NAME: &str = "domain.xml";
 #[cfg(unix)]
 const SESSION_DIR_MODE: u32 = 0o700;
 
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // RunRequest
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
 /// Caller-supplied parameters for [`run`].
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -147,10 +147,12 @@ pub fn run(config: &Config, request: &RunRequest) -> Result<RunOutcome> {
         &session_dir,
         DomainXmlInputs {
             gpu: gpu_bundle.as_ref().map(|b| (&b.address, &b.quirks)),
+            memory_mib: config.vm_memory_mib,
             overlay: &overlay.path,
             seed_iso: &seed_iso,
             ssh_hostfwd_port: Some(ssh_port),
             uuid: &uuid,
+            vcpus: config.vm_vcpus,
         },
     )?;
 
@@ -162,10 +164,12 @@ pub fn run(config: &Config, request: &RunRequest) -> Result<RunOutcome> {
             base: &base,
             envs: &config.base_envs,
             gpu_borrow: gpu_bundle.as_ref().map(|b| &b.receipt),
+            memory_mib: config.vm_memory_mib,
             overlay_virtual_gib: overlay.virtual_size_gib,
             seed: &seed,
             ssh_port: Some(ssh_port),
             uuid: &uuid,
+            vcpus: config.vm_vcpus,
         },
     )?;
 
@@ -222,9 +226,9 @@ fn capture_remote_url_for_test(
     Ok(Some(url))
 }
 
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // Session Setup
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
 /// Run the GPU host pre-check when `--gpu` is set. No-op when `None`.
 fn enforce_gpu_pre_check(request: &RunRequest) -> Result<Option<crate::gpu::PciAddress>> {
@@ -482,7 +486,13 @@ fn current_base_filename() -> Result<String> {
 
 /// Build the session domain XML, persist it, and return the string.
 fn write_domain_xml(session_dir: &Path, inputs: DomainXmlInputs<'_>) -> Result<(PathBuf, String)> {
-    let mut spec = SessionDomainSpec::new(inputs.uuid.to_owned(), inputs.overlay, inputs.seed_iso);
+    let mut spec = SessionDomainSpec::new(
+        inputs.uuid.to_owned(),
+        inputs.overlay,
+        inputs.seed_iso,
+        inputs.memory_mib,
+        inputs.vcpus,
+    );
     if let Some((addr, quirks)) = inputs.gpu {
         spec = spec.with_gpu(addr.clone(), *quirks);
     }
@@ -500,10 +510,12 @@ fn write_domain_xml(session_dir: &Path, inputs: DomainXmlInputs<'_>) -> Result<(
 /// Inputs for [`write_domain_xml`].
 struct DomainXmlInputs<'a> {
     gpu: Option<(&'a crate::gpu::PciAddress, &'a crate::gpu::quirks::VendorQuirks)>,
+    memory_mib: u32,
     overlay: &'a Path,
     seed_iso: &'a Path,
     ssh_hostfwd_port: Option<u16>,
     uuid: &'a str,
+    vcpus: u32,
 }
 
 /// Persist `metadata.json` for the session.
@@ -512,10 +524,12 @@ fn persist_metadata(metadata_path: &Path, request: &RunRequest, fields: PersistI
         alias: request.name.clone(),
         base: fields.base.to_owned(),
         envs: fields.envs.to_vec(),
+        memory_mib: fields.memory_mib,
         overlay_virtual_gib: fields.overlay_virtual_gib,
         persist: !request.ephemeral,
         repos: fields.seed.repos.clone(),
         uuid: fields.uuid.to_owned(),
+        vcpus: fields.vcpus,
     });
     metadata.gpu_borrow = fields.gpu_borrow.map(metadata::GpuBorrowRecord::from_receipt);
     metadata.ssh_port = fields.ssh_port;
@@ -528,10 +542,12 @@ struct PersistInputs<'a> {
     base: &'a str,
     envs: &'a [String],
     gpu_borrow: Option<&'a crate::gpu::driver::Receipt>,
+    memory_mib: u32,
     overlay_virtual_gib: u32,
     seed: &'a Seed,
     ssh_port: Option<u16>,
     uuid: &'a str,
+    vcpus: u32,
 }
 
 /// RAII rollback for the per-session directory.
@@ -625,9 +641,9 @@ fn define_session_xml(connection: &Connection, name: &str, xml: &str) -> Result<
     Ok(())
 }
 
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // Tests
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -861,9 +877,9 @@ mod tests {
     #[ignore = "requires a running qemu:///session libvirtd plus /dev/kvm; run with --ignored after setting up locally"]
     fn run_boots_session_against_real_libvirtd() {}
 
-    // ---------------------------------------------------------------------------
+    // -----------------------------------------------------------------------------
     // Test Utilities
-    // ---------------------------------------------------------------------------
+    // -----------------------------------------------------------------------------
 
     fn sample_config() -> Config {
         Config {
@@ -888,6 +904,8 @@ mod tests {
             user_gid: None,
             user_uid: None,
             user_username: None,
+            vm_memory_mib: 4_096,
+            vm_vcpus: 2,
         }
     }
 
@@ -896,6 +914,7 @@ mod tests {
             alias: None,
             base: "fedora-41-2026-05-01.qcow2".to_owned(),
             envs: vec!["rust".to_owned()],
+            memory_mib: 4_096,
             overlay_virtual_gib: 100,
             persist: true,
             repos: vec![RepoSpec {
@@ -903,6 +922,7 @@ mod tests {
                 default: true,
             }],
             uuid: "11111111-2222-3333-4444-555555555555".to_owned(),
+            vcpus: 2,
         })
     }
 
