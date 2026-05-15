@@ -272,7 +272,7 @@ pub enum BaseCommand {
     /// Fetch, verify, and apply the Tartarus layer to the latest base image.
     Pull {
         /// Override the Fedora release pulled (e.g. `41`). Defaults to
-        /// [`crate::disk::base::DEFAULT_FEDORA_RELEASE`].
+        /// [`tartarus_libvirt::disk::base::DEFAULT_FEDORA_RELEASE`].
         #[arg(long)]
         release: Option<String>,
     },
@@ -344,7 +344,7 @@ pub enum HostGpuCommand {
     /// Force-release a borrowed device.
     ///
     /// Walks the session metadata index to find which session
-    /// recorded the borrow, replays the saved [`crate::gpu::driver::Receipt`]
+    /// recorded the borrow, replays the saved [`tartarus_libvirt::gpu::driver::Receipt`]
     /// against the kernel, and clears the borrow record. Used when a
     /// session crashed without releasing the device.
     Release {
@@ -363,7 +363,7 @@ pub fn run(cli: Cli, config: Option<Config>) -> Result<()> {
         Command::Doctor => dispatch_doctor(config.as_ref()),
         Command::Grow { target } => dispatch_grow(config, &target),
         Command::List => dispatch_list(config),
-        Command::Rename { uuid, name } => dispatch_rename(&uuid, &name),
+        Command::Rename { uuid, name } => dispatch_rename(config, &uuid, &name),
         Command::Resume { target } => dispatch_resume(config, &target),
         Command::Host(cmd) => dispatch_host(cmd),
         Command::Run {
@@ -378,7 +378,7 @@ pub fn run(cli: Cli, config: Option<Config>) -> Result<()> {
             ..
         } => dispatch_run(
             config,
-            crate::session::run::RunRequest {
+            tartarus_provider::RunRequest {
                 background,
                 default_repo,
                 detach,
@@ -399,11 +399,11 @@ pub fn run(cli: Cli, config: Option<Config>) -> Result<()> {
 /// Dispatch the `tartarus ssh <alias|uuid> [-- <args>]` subcommand.
 fn dispatch_ssh(config: Option<Config>, target: String, ssh_args: Vec<String>) -> Result<()> {
     let config = require_config(config)?;
-    let request = crate::session::ssh_attach::AttachRequest {
+    let request = tartarus_libvirt::session::ssh_attach::AttachRequest {
         target,
         trailing_ssh_args: ssh_args,
     };
-    let outcome = crate::session::ssh_attach::run(&config, &request)?;
+    let outcome = tartarus_libvirt::session::ssh_attach::run(&config, &request)?;
     tracing::info!(uuid = %outcome.uuid, port = outcome.host_port, "ssh attach finished");
     Ok(())
 }
@@ -421,8 +421,8 @@ fn dispatch_host(cmd: HostCommand) -> Result<()> {
 /// Render `tartarus host gpu setup-gpu`: print the udev rule plus
 /// the `install` command the operator should run as root.
 fn dispatch_host_gpu_setup() -> Result<()> {
-    let user = crate::host_user::current()?;
-    let rule = crate::gpu::setup::build_udev_rule(&user.username);
+    let user = tartarus_provider::host_user::current()?;
+    let rule = tartarus_libvirt::gpu::setup::build_udev_rule(&user.username);
 
     println!("# udev rule for {user}", user = user.username);
     print!("{body}", body = rule.body);
@@ -447,7 +447,7 @@ fn dispatch_host_gpu_setup() -> Result<()> {
 /// marker so the operator can spot at a glance which devices are
 /// safely poolable.
 fn dispatch_host_gpu_list() -> Result<()> {
-    let gpus = crate::gpu::pci::list_gpus()?;
+    let gpus = tartarus_libvirt::gpu::pci::list_gpus()?;
 
     if gpus.is_empty() {
         println!("no display-class PCI devices found");
@@ -455,7 +455,7 @@ fn dispatch_host_gpu_list() -> Result<()> {
     }
 
     for gpu in &gpus {
-        let group = crate::gpu::iommu::group_for(&gpu.address).ok();
+        let group = tartarus_libvirt::gpu::iommu::group_for(&gpu.address).ok();
         let group_label = match group {
             Some(g) if g.is_clean_for_passthrough(&gpu.address) => {
                 let id = g.id;
@@ -479,15 +479,15 @@ fn dispatch_host_gpu_list() -> Result<()> {
     Ok(())
 }
 
-/// Run [`crate::gpu::driver::release_with_receipt`] manually for a
+/// Run [`tartarus_libvirt::gpu::driver::release_with_receipt`] manually for a
 /// device a crashed session left borrowed.
 fn dispatch_host_gpu_release(bdf: &str) -> Result<()> {
-    let address: crate::gpu::PciAddress = bdf.parse()?;
-    let receipt = crate::session::gpu_index::lookup_receipt(&address)?;
+    let address: tartarus_libvirt::gpu::PciAddress = bdf.parse()?;
+    let receipt = tartarus_libvirt::session::gpu_index::lookup_receipt(&address)?;
 
-    let io = crate::gpu::driver::KernelSysfs;
-    crate::gpu::driver::release_with_receipt(&io, &receipt)?;
-    crate::session::gpu_index::clear_receipt(&address)?;
+    let io = tartarus_libvirt::gpu::driver::KernelSysfs;
+    tartarus_libvirt::gpu::driver::release_with_receipt(&io, &receipt)?;
+    tartarus_libvirt::session::gpu_index::clear_receipt(&address)?;
 
     println!("released {address}");
     Ok(())
@@ -495,20 +495,20 @@ fn dispatch_host_gpu_release(bdf: &str) -> Result<()> {
 
 /// Render `tartarus host gpu status` output to stdout.
 ///
-/// Calls [`crate::gpu::HostPreCheck::probe`] and prints one line per
+/// Calls [`tartarus_libvirt::gpu::HostPreCheck::probe`] and prints one line per
 /// check. With `bdf`, the IOMMU-group section also lists every device
 /// in the target's group so the operator can decide whether passing it
 /// through is safe.
 fn dispatch_host_gpu_status(bdf: Option<&str>) -> Result<()> {
     let target = match bdf {
-        Some(s) => Some(s.parse::<crate::gpu::PciAddress>()?),
+        Some(s) => Some(s.parse::<tartarus_libvirt::gpu::PciAddress>()?),
         None => None,
     };
 
-    let outcome = crate::gpu::HostPreCheck::probe(target.as_ref())?;
+    let outcome = tartarus_libvirt::gpu::HostPreCheck::probe(target.as_ref())?;
 
     if let Some(addr) = target.as_ref()
-        && let Ok(device) = crate::gpu::PciDevice::at(addr.clone())
+        && let Ok(device) = tartarus_libvirt::gpu::PciDevice::at(addr.clone())
     {
         println!("device:              {}", device.label());
         println!("pci_address:         {addr}");
@@ -520,7 +520,7 @@ fn dispatch_host_gpu_status(bdf: Option<&str>) -> Result<()> {
         println!("iommu_group_clean:   {}", outcome.iommu_group_clean.unwrap_or(false));
         println!("iommu_group_members:");
         for member in &group.members {
-            let label = crate::gpu::PciDevice::at(member.clone())
+            let label = tartarus_libvirt::gpu::PciDevice::at(member.clone())
                 .map(|d| d.label())
                 .unwrap_or_else(|_| String::new());
             if label.is_empty() {
@@ -537,8 +537,8 @@ fn dispatch_host_gpu_status(bdf: Option<&str>) -> Result<()> {
 /// Dispatch the `tartarus set <alias|uuid>` subcommand.
 fn dispatch_set(config: Option<Config>, target: &str, memory: Option<u32>, vcpus: Option<u32>) -> Result<()> {
     let config = require_config(config)?;
-    let request = crate::session::set::SetRequest { memory, vcpus };
-    let outcome = crate::session::set::run(&config, target, &request)?;
+    let request = tartarus_libvirt::session::set::SetRequest { memory, vcpus };
+    let outcome = tartarus_libvirt::session::set::run(&config, target, &request)?;
     println!(
         "session {uuid} updated: memory={mem}M vcpus={cpu}",
         uuid = outcome.uuid,
@@ -552,7 +552,7 @@ fn dispatch_set(config: Option<Config>, target: &str, memory: Option<u32>, vcpus
 fn dispatch_update(config: Option<Config>, target: &str) -> Result<()> {
     let config = require_config(config)?;
 
-    let outcome = crate::session::update::run(&config, target)?;
+    let outcome = tartarus_libvirt::session::update::run(&config, target)?;
     tracing::info!(uuid = %outcome.uuid, mode = ?outcome.mode, "update complete");
     println!("session {uuid} updated", uuid = outcome.uuid);
 
@@ -580,7 +580,7 @@ pub fn cli_overrides(cli: &Cli) -> CliOverrides {
         if !repo.is_empty() {
             overrides.base_repos = Some(
                 repo.iter()
-                    .map(|slug| crate::config::RepoEntry {
+                    .map(|slug| tartarus_provider::config::RepoEntry {
                         default: false,
                         slug: slug.clone(),
                     })
@@ -617,7 +617,7 @@ fn dispatch_auth(cmd: AuthCommand, config: Option<&Config>) -> Result<()> {
         } => crate::auth::run_init_google(),
         AuthCommand::Rotate => stub("auth rotate", None),
         AuthCommand::Status => {
-            let path = crate::paths::config_file()?;
+            let path = tartarus_provider::paths::config_file()?;
             let file = crate::auth::load_file_config_optional(&path)?;
             crate::auth::run_status(config, file.as_ref())
         },
@@ -630,9 +630,9 @@ fn dispatch_doctor(config: Option<&Config>) -> Result<()> {
     let resolved = match config {
         Some(c) => c,
         None => {
-            owned_default = crate::config::Config::resolve(
-                crate::config::FileConfig::default(),
-                crate::config::CliOverrides::default(),
+            owned_default = tartarus_provider::config::Config::resolve(
+                tartarus_provider::config::FileConfig::default(),
+                tartarus_provider::config::CliOverrides::default(),
             );
             &owned_default
         },
@@ -651,18 +651,18 @@ fn dispatch_doctor(config: Option<&Config>) -> Result<()> {
 fn dispatch_base(cmd: BaseCommand) -> Result<()> {
     match cmd {
         BaseCommand::List => {
-            let library = crate::disk::base::list()?;
-            print!("{}", crate::disk::base::render_list(&library));
+            let library = tartarus_libvirt::disk::base::list()?;
+            print!("{}", tartarus_libvirt::disk::base::render_list(&library));
             Ok(())
         },
         BaseCommand::Prune { dry_run } => {
-            let rendered = crate::disk::base::prune(dry_run)?;
+            let rendered = tartarus_libvirt::disk::base::prune(dry_run)?;
             print!("{rendered}");
             Ok(())
         },
         BaseCommand::Pull { release } => {
-            let release = release.unwrap_or_else(|| crate::disk::base::DEFAULT_FEDORA_RELEASE.to_owned());
-            let base = crate::disk::base::pull(&release)?;
+            let release = release.unwrap_or_else(|| tartarus_libvirt::disk::base::DEFAULT_FEDORA_RELEASE.to_owned());
+            let base = tartarus_libvirt::disk::base::pull(&release)?;
             tracing::info!(name = %base.name, "base pull complete");
             println!("base/current -> {name}", name = base.name);
             Ok(())
@@ -671,11 +671,14 @@ fn dispatch_base(cmd: BaseCommand) -> Result<()> {
 }
 
 /// Dispatch the `tartarus run` subcommand.
-fn dispatch_run(config: Option<Config>, request: crate::session::run::RunRequest) -> Result<()> {
+fn dispatch_run(config: Option<Config>, request: tartarus_provider::RunRequest) -> Result<()> {
+    use tartarus_provider::SessionProvider;
+
     let config = require_config(config)?;
     config.validate_for_run()?;
 
-    let outcome = crate::session::run::run(&config, &request)?;
+    let provider = crate::provider::Provider::from_config(config, &request)?;
+    let outcome = provider.run(&request)?;
 
     let label = outcome.alias.as_deref().unwrap_or("(unnamed)");
     println!("session {uuid} started ({label})", uuid = outcome.uuid);
@@ -687,7 +690,7 @@ fn dispatch_run(config: Option<Config>, request: crate::session::run::RunRequest
 fn dispatch_grow(config: Option<Config>, target: &str) -> Result<()> {
     let config = require_config(config)?;
 
-    let outcome = crate::disk::grow::run(&config, target)?;
+    let outcome = tartarus_libvirt::disk::grow::run(&config, target)?;
     tracing::info!(
         uuid = %outcome.uuid,
         before_gib = outcome.before_gib,
@@ -707,9 +710,11 @@ fn dispatch_grow(config: Option<Config>, target: &str) -> Result<()> {
 
 /// Dispatch the `tartarus resume <alias|uuid>` subcommand.
 fn dispatch_resume(config: Option<Config>, target: &str) -> Result<()> {
-    let config = require_config(config)?;
+    use tartarus_provider::SessionProvider;
 
-    let outcome = crate::session::resume::run(&config, target)?;
+    let config = require_config(config)?;
+    let provider = crate::provider::Provider::from_config_for_lifecycle(config)?;
+    let outcome = provider.resume(target)?;
     tracing::info!(uuid = %outcome.uuid, started = outcome.started_from_shutoff, "resume complete");
 
     Ok(())
@@ -718,39 +723,52 @@ fn dispatch_resume(config: Option<Config>, target: &str) -> Result<()> {
 /// Require a config, surfacing `ConfigError::NotFound` when absent.
 fn require_config(config: Option<Config>) -> Result<Config> {
     config.ok_or_else(|| {
-        Error::Config(crate::config::ConfigError::NotFound {
-            path: crate::paths::config_file().unwrap_or_default(),
+        Error::Config(tartarus_provider::config::ConfigError::NotFound {
+            path: tartarus_provider::paths::config_file().unwrap_or_default(),
         })
     })
 }
 
 /// Dispatch the `tartarus destroy <alias|uuid>` subcommand.
 fn dispatch_destroy(config: Option<Config>, target: &str) -> Result<()> {
+    use tartarus_provider::SessionProvider;
+
     let config = require_config(config)?;
-    let outcome = crate::session::destroy::run(&config, target)?;
+    let provider = crate::provider::Provider::from_config_for_lifecycle(config)?;
+    let outcome = provider.destroy(target)?;
     println!("session {uuid} destroyed", uuid = outcome.uuid);
     Ok(())
 }
 
 /// Dispatch the `tartarus list` subcommand.
 fn dispatch_list(config: Option<Config>) -> Result<()> {
+    use tartarus_provider::SessionProvider;
+
     let config = require_config(config)?;
-    let table = crate::session::list::run(&config)?;
-    print!("{table}");
+    let provider = crate::provider::Provider::from_config_for_lifecycle(config)?;
+    let entries = provider.list()?;
+    print!("{table}", table = tartarus_libvirt::session::list::render(&entries));
     Ok(())
 }
 
 /// Dispatch the `tartarus rename <uuid> <name>` subcommand.
-fn dispatch_rename(uuid: &str, alias: &str) -> Result<()> {
-    let outcome = crate::session::rename::run(uuid, alias)?;
+fn dispatch_rename(config: Option<Config>, uuid: &str, alias: &str) -> Result<()> {
+    use tartarus_provider::SessionProvider;
+
+    let config = require_config(config)?;
+    let provider = crate::provider::Provider::from_config_for_lifecycle(config)?;
+    let outcome = provider.rename(uuid, alias)?;
     println!("alias '{alias}' -> {uuid}", alias = outcome.alias, uuid = outcome.uuid,);
     Ok(())
 }
 
 /// Dispatch the `tartarus stop <alias|uuid>` subcommand.
 fn dispatch_stop(config: Option<Config>, target: &str) -> Result<()> {
+    use tartarus_provider::SessionProvider;
+
     let config = require_config(config)?;
-    let outcome = crate::session::stop::run(&config, target)?;
+    let provider = crate::provider::Provider::from_config_for_lifecycle(config)?;
+    let outcome = provider.stop(target)?;
     if outcome.force_stopped {
         println!(
             "session {name} force-stopped (graceful shutdown timed out)",
@@ -767,7 +785,7 @@ fn dispatch_env(cmd: EnvCommand, config: Option<Config>) -> Result<()> {
     let config = require_config(config)?;
     match cmd {
         EnvCommand::Add { target, name } => {
-            let outcome = crate::session::env::add(&config, &target, &name)?;
+            let outcome = tartarus_libvirt::session::env::add(&config, &target, &name)?;
             tracing::info!(uuid = %outcome.uuid, env = %outcome.env, "env add complete");
             println!(
                 "session {uuid}: env {env} ready",
@@ -777,7 +795,7 @@ fn dispatch_env(cmd: EnvCommand, config: Option<Config>) -> Result<()> {
             Ok(())
         },
         EnvCommand::Update { target } => {
-            let outcome = crate::session::env::update(&config, &target)?;
+            let outcome = tartarus_libvirt::session::env::update(&config, &target)?;
             tracing::info!(uuid = %outcome.uuid, "env update complete");
             println!("session {uuid}: envs updated", uuid = outcome.uuid);
             Ok(())
@@ -951,7 +969,7 @@ mod tests {
         let err = run(cli, None).expect_err("resume without a config should fail");
 
         match err {
-            Error::Config(crate::config::ConfigError::NotFound { .. }) => {},
+            Error::Config(tartarus_provider::config::ConfigError::NotFound { .. }) => {},
             other => panic!("expected Config::NotFound for resume without a config, got {other:?}"),
         }
     }
@@ -1026,7 +1044,7 @@ mod tests {
         let err = run(cli, None).expect_err("grow without a config should fail");
 
         match err {
-            Error::Config(crate::config::ConfigError::NotFound { .. }) => {},
+            Error::Config(tartarus_provider::config::ConfigError::NotFound { .. }) => {},
             other => panic!("expected Config::NotFound for grow without a config, got {other:?}"),
         }
     }
@@ -1065,8 +1083,8 @@ mod tests {
         let err = run(cli, None).expect_err("env add bogus should fail");
 
         match err {
-            Error::Config(crate::config::ConfigError::NotFound { .. }) => {},
-            Error::Session(crate::session::error::SessionError::UnknownEnv { env, .. }) => {
+            Error::Config(tartarus_provider::config::ConfigError::NotFound { .. }) => {},
+            Error::Session(tartarus_provider::session::SessionError::UnknownEnv { env, .. }) => {
                 assert_eq!(env, "haskell", "the rejected env name should round-trip into the error");
             },
             other => panic!("expected Config::NotFound or Session::UnknownEnv, got {other:?}"),
@@ -1080,7 +1098,7 @@ mod tests {
         let err = run(cli, None).expect_err("env add without a config should fail");
 
         match err {
-            Error::Config(crate::config::ConfigError::NotFound { .. }) => {},
+            Error::Config(tartarus_provider::config::ConfigError::NotFound { .. }) => {},
             other => panic!("expected Config::NotFound for env add without a config, got {other:?}"),
         }
     }

@@ -1,7 +1,7 @@
 //! Worked example: drive `tartarus update <session>` against an existing
 //! session passed as a CLI argument.
 //!
-//! Drives [`tartarus::session::update::run`] which auto-detects whether
+//! Drives [`tartarus_libvirt::session::update::run`] which auto-detects whether
 //! the session is running or stopped and routes accordingly. Requires a
 //! populated config and a session whose `qemu-guest-agent` is reachable.
 //!
@@ -9,7 +9,8 @@
 
 use std::process::ExitCode;
 
-use tartarus::{config, error::Error, logging, refuse_root, session::update};
+use tartarus::{config, error::Error, logging, refuse_root};
+use tartarus_libvirt::session::update;
 
 // Constants
 
@@ -57,7 +58,7 @@ fn main() -> ExitCode {
         },
     };
 
-    match update::run(&resolved, &target) {
+    match update::run(&resolved, &target).map_err(Error::from) {
         Ok(outcome) => {
             println!(
                 "update_session example: session {uuid} updated in {mode:?} mode",

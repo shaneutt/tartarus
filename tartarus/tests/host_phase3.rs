@@ -11,7 +11,7 @@
 
 use std::time::Duration;
 
-use tartarus::host::{
+use tartarus_libvirt::host::{
     agent::Agent,
     connect::{Connection, DEFAULT_URI},
     domain::{self, DomainSpec},

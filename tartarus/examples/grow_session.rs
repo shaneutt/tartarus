@@ -1,7 +1,7 @@
 //! Worked example: drive `tartarus grow <session>` against a running
 //! session passed as a CLI argument.
 //!
-//! Drives [`tartarus::disk::grow::run`] which performs the four-step
+//! Drives [`tartarus_libvirt::disk::grow::run`] which performs the four-step
 //! online grow: `qemu-img info` → `qemu-img resize` →
 //! `virDomainBlockResize` → in-guest `growpart` + `resize2fs`. The
 //! session must be running.
@@ -10,7 +10,8 @@
 
 use std::process::ExitCode;
 
-use tartarus::{config, disk::grow, error::Error, logging, refuse_root};
+use tartarus::{config, error::Error, logging, refuse_root};
+use tartarus_libvirt::disk::grow;
 
 // Constants
 
@@ -58,7 +59,7 @@ fn main() -> ExitCode {
         },
     };
 
-    match grow::run(&resolved, &target) {
+    match grow::run(&resolved, &target).map_err(Error::from) {
         Ok(outcome) => {
             println!(
                 "grow_session example: session {uuid} grown {before}G -> {after}G",

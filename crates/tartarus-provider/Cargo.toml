@@ -1,0 +1,20 @@
+[package]
+name = "tartarus-provider"
+description = "Provider-agnostic interface and shared types for Tartarus session backends."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+directories.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true

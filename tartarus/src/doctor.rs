@@ -11,7 +11,10 @@ use std::{
     time::Duration,
 };
 
-use crate::{config::Config, disk::base, error::Result, host::connect::Connection, paths};
+use tartarus_libvirt::{disk::base, host::connect::Connection};
+use tartarus_provider::paths;
+
+use crate::{config::Config, error::Result};
 
 // -----------------------------------------------------------------------------
 // Constants
@@ -905,9 +908,9 @@ mod tests {
 
     #[test]
     fn run_checks_emits_one_result_per_documented_check() {
-        let config = crate::config::Config::resolve(
-            crate::config::FileConfig::default(),
-            crate::config::CliOverrides::default(),
+        let config = tartarus_provider::config::Config::resolve(
+            tartarus_provider::config::FileConfig::default(),
+            tartarus_provider::config::CliOverrides::default(),
         );
 
         let results = run_checks(&config);

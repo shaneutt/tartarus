@@ -2,7 +2,7 @@
 //! repo, attach the console for the lifetime of the session, then clean
 //! up the overlay + libvirt domain.
 //!
-//! Drives [`tartarus::session::run::run`] and [`tartarus::session::destroy::run`]
+//! Drives [`tartarus_libvirt::session::run::run`] and [`tartarus_libvirt::session::destroy::run`]
 //! end-to-end. The example needs:
 //!
 //! - a populated `~/.config/tartarus/config.toml` with a GitHub PAT and Anthropic key (run `tartarus auth init` first),
@@ -18,11 +18,9 @@ use tartarus::{
     config::{self, ConfigError},
     error::Error,
     logging, refuse_root,
-    session::{
-        destroy,
-        run::{self, RunRequest},
-    },
 };
+use tartarus_libvirt::session::{destroy, run};
+use tartarus_provider::RunRequest;
 
 // Constants
 
@@ -61,14 +59,15 @@ fn main() -> ExitCode {
 
     let resolved = match config::load_and_resolve(config::CliOverrides::default()) {
         Ok(c) => c,
-        Err(Error::Config(ConfigError::NotFound { path })) => {
-            eprintln!(
-                "run_session example: config not found at {p}; run `tartarus auth init` first",
-                p = path.display(),
-            );
-            return ExitCode::from(EXIT_GENERIC_FAILURE);
-        },
-        Err(err) => {
+        Err(provider_err) => {
+            let err = Error::from(provider_err);
+            if let Error::Config(ConfigError::NotFound { path }) = &err {
+                eprintln!(
+                    "run_session example: config not found at {p}; run `tartarus auth init` first",
+                    p = path.display(),
+                );
+                return ExitCode::from(EXIT_GENERIC_FAILURE);
+            }
             eprintln!("run_session example: failed to load config: {err}");
             return ExitCode::from(EXIT_GENERIC_FAILURE);
         },
@@ -90,7 +89,7 @@ fn main() -> ExitCode {
         repos: vec![repo],
     };
 
-    let outcome = match run::run(&resolved, &request) {
+    let outcome = match run::run(&resolved, &request).map_err(Error::from) {
         Ok(outcome) => outcome,
         Err(Error::Host(err)) => {
             eprintln!(

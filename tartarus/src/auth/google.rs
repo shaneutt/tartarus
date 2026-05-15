@@ -42,7 +42,7 @@ where
     if project_id.trim().is_empty() {
         return Err(AuthError::InteractiveReadFailed(std::io::Error::other("project ID was empty")).into());
     }
-    if !crate::seed::input::is_safe_single_line(&project_id) {
+    if !tartarus_provider::seed::input::is_safe_single_line(&project_id) {
         return Err(
             AuthError::InteractiveReadFailed(std::io::Error::other("project ID contains unsafe characters")).into(),
         );
@@ -50,7 +50,7 @@ where
 
     let region =
         prompt::read_line_with_default(reader, writer, &format!("Region [{DEFAULT_REGION}]: "), DEFAULT_REGION)?;
-    if !crate::seed::input::is_safe_single_line(&region) {
+    if !tartarus_provider::seed::input::is_safe_single_line(&region) {
         return Err(
             AuthError::InteractiveReadFailed(std::io::Error::other("region contains unsafe characters")).into(),
         );
@@ -124,18 +124,18 @@ mod tests {
 
         crate::auth::write::write_config(
             &path,
-            &crate::config::FileConfig {
-                claude: crate::config::ClaudeSection {
-                    anthropic: crate::config::ClaudeAnthropicSection {
+            &tartarus_provider::config::FileConfig {
+                claude: tartarus_provider::config::ClaudeSection {
+                    anthropic: tartarus_provider::config::ClaudeAnthropicSection {
                         api_key: Some("sk-ant-existing".to_owned()),
                     },
                     backend: Some(Backend::Anthropic),
-                    ..crate::config::ClaudeSection::default()
+                    ..tartarus_provider::config::ClaudeSection::default()
                 },
-                github: crate::config::GithubSection {
+                github: tartarus_provider::config::GithubSection {
                     token: Some("ghp_existing".to_owned()),
                 },
-                ..crate::config::FileConfig::default()
+                ..tartarus_provider::config::FileConfig::default()
             },
             false,
         )
@@ -153,7 +153,7 @@ mod tests {
 
         run(&path, &mut reader, &mut writer).expect("vertex flow should succeed");
 
-        let parsed = crate::config::load_from(&path).expect("merged config should load");
+        let parsed = tartarus_provider::config::load_from(&path).expect("merged config should load");
 
         assert_eq!(
             parsed.claude.backend,

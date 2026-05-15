@@ -36,7 +36,7 @@ pub fn load_file_config_optional(path: &Path) -> Result<Option<config::FileConfi
 /// (paste, or browser fallback). Writes `config.toml` at mode `0600`;
 /// refuses to overwrite unless `force` is set.
 pub fn run_init(force: bool) -> Result<()> {
-    let path = crate::paths::config_file()?;
+    let path = tartarus_provider::paths::config_file()?;
 
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
@@ -55,7 +55,7 @@ pub fn run_init(force: bool) -> Result<()> {
 /// bundle by prompting for project ID, region, and service-account
 /// JSON path. Merges into any existing config at mode `0600`.
 pub fn run_init_google() -> Result<()> {
-    let path = crate::paths::config_file()?;
+    let path = tartarus_provider::paths::config_file()?;
 
     google::run(&path, &mut std::io::stdin().lock(), &mut std::io::stdout().lock())
 }

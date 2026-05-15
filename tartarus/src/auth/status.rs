@@ -90,10 +90,11 @@ fn write_plain_line<W: Write>(writer: &mut W, label: &str, value: Option<&str>) 
 mod tests {
     use std::path::PathBuf;
 
-    use super::*;
-    use crate::config::{
+    use tartarus_provider::config::{
         Backend, ClaudeAnthropicSection, ClaudeSection, ClaudeVertexSection, FileConfig, GithubSection,
     };
+
+    use super::*;
 
     #[test]
     fn missing_file_reports_everything_unconfigured() {

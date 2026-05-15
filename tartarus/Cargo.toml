@@ -8,6 +8,10 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+tartarus-hetzner = { path = "../crates/tartarus-hetzner" }
+tartarus-libvirt = { path = "../crates/tartarus-libvirt" }
+tartarus-provider = { path = "../crates/tartarus-provider" }
+
 clap.workspace = true
 directories.workspace = true
 reqwest.workspace = true

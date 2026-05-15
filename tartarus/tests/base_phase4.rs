@@ -16,7 +16,7 @@
 //! `disk::base::layering_seed`; these integration tests close the loop on
 //! the network + libvirt + KVM ends.
 
-use tartarus::disk::base;
+use tartarus_libvirt::disk::base;
 
 #[test]
 #[ignore = "requires a running qemu:///session libvirtd; run with --ignored after setting up locally"]

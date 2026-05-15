@@ -200,7 +200,7 @@ mod tests {
         })
         .expect("paste-only flow should succeed");
 
-        let parsed = crate::config::load_from(&path).expect("written config should load");
+        let parsed = tartarus_provider::config::load_from(&path).expect("written config should load");
 
         assert_eq!(parsed.github.token.as_deref(), Some("ghp_pasted_pat"));
         assert_eq!(parsed.claude.anthropic.api_key.as_deref(), Some("sk-ant-pasted"));

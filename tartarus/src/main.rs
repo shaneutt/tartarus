@@ -69,11 +69,16 @@ fn resolve_config(cli: &Cli) -> Result<Option<tartarus::config::Config>> {
 
     match config::load_and_resolve(overrides) {
         Ok(config) => Ok(Some(config)),
-        Err(Error::Config(ConfigError::NotFound { path })) if cli::tolerates_missing_config(cli) => {
-            tracing::debug!(?path, "no config file present; subcommand tolerates this");
-            Ok(None)
+        Err(provider_err) => {
+            let err = Error::from(provider_err);
+            if let Error::Config(ConfigError::NotFound { path }) = &err
+                && cli::tolerates_missing_config(cli)
+            {
+                tracing::debug!(?path, "no config file present; subcommand tolerates this");
+                return Ok(None);
+            }
+            Err(err)
         },
-        Err(other) => Err(other),
     }
 }
 

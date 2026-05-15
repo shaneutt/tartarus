@@ -1,5 +1,5 @@
 [workspace]
-members = ["tartarus"]
+members = ["crates/tartarus-hetzner", "crates/tartarus-libvirt", "crates/tartarus-provider", "tartarus"]
 resolver = "3"
 
 [workspace.package]

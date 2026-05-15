@@ -1151,12 +1151,54 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "tartarus-hetzner",
+ "tartarus-libvirt",
+ "tartarus-provider",
  "thiserror 1.0.69",
  "toml",
  "tracing",
  "tracing-subscriber",
  "uuid",
  "virt",
+]
+
+[[package]]
+name = "tartarus-hetzner"
+version = "0.1.0"
+dependencies = [
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tartarus-provider",
+ "thiserror 1.0.69",
+ "tracing",
+]
+
+[[package]]
+name = "tartarus-libvirt"
+version = "0.1.0"
+dependencies = [
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tartarus-provider",
+ "thiserror 1.0.69",
+ "tracing",
+ "uuid",
+ "virt",
+]
+
+[[package]]
+name = "tartarus-provider"
+version = "0.1.0"
+dependencies = [
+ "directories",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "toml",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]

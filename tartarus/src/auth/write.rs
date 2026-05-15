@@ -83,7 +83,7 @@ where
     F: FnOnce(&mut FileConfig),
 {
     let mut current = if path.exists() {
-        crate::config::load_from(path)?
+        tartarus_provider::config::load_from(path)?
     } else {
         FileConfig::default()
     };
@@ -167,8 +167,9 @@ fn enforce_owner_only_mode(_path: &Path) -> Result<()> {
 mod tests {
     use std::path::PathBuf;
 
+    use tartarus_provider::config::{ClaudeAnthropicSection, ClaudeSection, GithubSection};
+
     use super::*;
-    use crate::config::{ClaudeAnthropicSection, ClaudeSection, GithubSection};
 
     #[cfg(unix)]
     #[test]
@@ -216,7 +217,7 @@ mod tests {
 
         write_config(&path, &updated, true).expect("forced overwrite should succeed");
 
-        let parsed = crate::config::load_from(&path).expect("forced write should round-trip");
+        let parsed = tartarus_provider::config::load_from(&path).expect("forced write should round-trip");
 
         assert_eq!(
             parsed.github.token.as_deref(),
@@ -233,7 +234,7 @@ mod tests {
 
         write_config(&path, &cfg, false).expect("write should succeed");
 
-        let parsed = crate::config::load_from(&path).expect("written config should be loadable");
+        let parsed = tartarus_provider::config::load_from(&path).expect("written config should be loadable");
 
         assert_eq!(
             parsed.github.token.as_deref(),
@@ -261,7 +262,7 @@ mod tests {
         })
         .expect("merge should succeed");
 
-        let parsed = crate::config::load_from(&path).expect("merged config should be loadable");
+        let parsed = tartarus_provider::config::load_from(&path).expect("merged config should be loadable");
 
         assert_eq!(
             parsed.github.token.as_deref(),
@@ -290,7 +291,7 @@ mod tests {
         })
         .expect("merge into missing file should succeed");
 
-        let parsed = crate::config::load_from(&path).expect("written config should be loadable");
+        let parsed = tartarus_provider::config::load_from(&path).expect("written config should be loadable");
 
         assert_eq!(
             parsed.claude.vertex.project_id.as_deref(),
@@ -360,7 +361,7 @@ mod tests {
                 anthropic: ClaudeAnthropicSection {
                     api_key: Some("sk-ant-test".to_owned()),
                 },
-                backend: Some(crate::config::Backend::Anthropic),
+                backend: Some(tartarus_provider::config::Backend::Anthropic),
                 ..ClaudeSection::default()
             },
             github: GithubSection {

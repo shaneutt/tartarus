@@ -7,18 +7,15 @@
 
 pub mod auth;
 pub mod cli;
-pub mod config;
-pub mod disk;
 pub mod doctor;
 pub mod error;
-pub mod gpu;
-pub mod host;
-pub mod host_user;
 pub mod logging;
-pub mod paths;
-pub mod seed;
-pub mod session;
-pub mod time;
+pub mod provider;
+
+// Configuration is provider-agnostic and lives in `tartarus-provider`.
+// Re-exported here so the binary's `crate::config::...` import path
+// keeps resolving after the workspace split.
+pub use tartarus_provider::config;
 
 // -----------------------------------------------------------------------------
 // Root Guard

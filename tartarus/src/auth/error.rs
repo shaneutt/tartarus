@@ -45,7 +45,7 @@ pub enum AuthError {
         path: PathBuf,
     },
 
-    /// TOML serialisation of [`crate::config::FileConfig`] failed.
+    /// TOML serialisation of [`tartarus_provider::config::FileConfig`] failed.
     #[error("failed to serialise config to TOML: {0}")]
     Serialize(#[from] toml::ser::Error),
 

@@ -1,7 +1,7 @@
 //! Worked example: fetch the latest Fedora cloud base, GPG-verify it,
 //! apply the Tartarus layer, and update the `current` symlink.
 //!
-//! Drives [`tartarus::disk::base::pull`] directly, the same code path the
+//! Drives [`tartarus_libvirt::disk::base::pull`] directly, the same code path the
 //! `tartarus base pull` subcommand runs. The layering boot requires a
 //! working `qemu:///session` libvirtd plus `/dev/kvm`; on a host that
 //! lacks either, the example surfaces the libvirt error verbatim and
@@ -9,11 +9,8 @@
 
 use std::process::ExitCode;
 
-use tartarus::{
-    disk::base::{self, DEFAULT_FEDORA_RELEASE},
-    error::Error,
-    logging, refuse_root,
-};
+use tartarus::{error::Error, logging, refuse_root};
+use tartarus_libvirt::disk::base::{self, DEFAULT_FEDORA_RELEASE};
 
 // Constants
 
@@ -46,7 +43,7 @@ fn main() -> ExitCode {
         .nth(1)
         .unwrap_or_else(|| DEFAULT_FEDORA_RELEASE.to_owned());
 
-    match base::pull(&release) {
+    match base::pull(&release).map_err(Error::from) {
         Ok(base) => {
             println!("base_pull example: completed; current -> {name}", name = base.name);
             ExitCode::from(EXIT_SUCCESS)
