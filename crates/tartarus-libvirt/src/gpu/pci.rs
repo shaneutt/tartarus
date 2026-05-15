@@ -347,4 +347,31 @@ mod tests {
             "sysfs_path should end with the canonical address, got {path:?}",
         );
     }
+
+    #[test]
+    fn parse_hex_prefixed_accepts_valid_input() {
+        assert_eq!(parse_hex_prefixed("0x10de\n"), Some(0x10DE));
+        assert_eq!(parse_hex_prefixed("0x1234"), Some(0x1234));
+        assert_eq!(parse_hex_prefixed("0X00FF"), Some(0x00FF));
+    }
+
+    #[test]
+    fn parse_hex_prefixed_rejects_invalid_input() {
+        assert_eq!(parse_hex_prefixed(""), None, "empty string");
+        assert_eq!(parse_hex_prefixed("1234"), None, "missing prefix");
+        assert_eq!(parse_hex_prefixed("0xZZZZ"), None, "non-hex digits");
+        assert_eq!(parse_hex_prefixed("0x1FFFF"), None, "overflow u16");
+    }
+
+    #[test]
+    fn parse_hex_prefixed_wide_accepts_valid_input() {
+        assert_eq!(parse_hex_prefixed_wide("0x030000\n"), Some(0x03_0000));
+        assert_eq!(parse_hex_prefixed_wide("0XAABBCC"), Some(0xAABBCC));
+    }
+
+    #[test]
+    fn parse_hex_prefixed_wide_rejects_invalid_input() {
+        assert_eq!(parse_hex_prefixed_wide(""), None, "empty string");
+        assert_eq!(parse_hex_prefixed_wide("030000"), None, "missing prefix");
+    }
 }

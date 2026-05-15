@@ -29,7 +29,7 @@ pub struct UdevRule {
 /// Render the udev rule granting `username` read+write on VFIO
 /// group nodes.
 pub fn build_udev_rule(username: &str) -> UdevRule {
-    debug_assert!(
+    assert!(
         tartarus_provider::host_user::is_valid_username(username),
         "username must pass POSIX validation before reaching udev rule generation",
     );

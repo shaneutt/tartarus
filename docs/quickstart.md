@@ -15,15 +15,15 @@ Install on Fedora:
 ```console
 sudo dnf install libvirt-daemon-config-network libvirt-daemon-driver-qemu \
                  libvirt-daemon-kvm libvirt-devel \
-                 qemu-img genisoimage gnupg2
+                 passt qemu-img genisoimage gnupg2
 sudo usermod -aG kvm $USER
 # log out / back in for the kvm group to take effect
 systemctl --user enable --now libvirtd
 ```
 
 On Debian / Ubuntu (`apt`), the analogous packages are
-`libvirt-daemon-system libvirt-clients libvirt-dev qemu-utils
-genisoimage gnupg`. Membership in the `kvm` group and a running
+`libvirt-daemon-system libvirt-clients libvirt-dev passt
+qemu-utils genisoimage gnupg`. Membership in the `kvm` group and a running
 user-session libvirtd are the same.
 
 Confirm `qemu:///session` is reachable, `/dev/kvm` is readable, and the
@@ -99,15 +99,15 @@ ships a new cloud image.
 tartarus run --repo owner/name
 ```
 
-The session boots, cloud-init clones the repo into `~/tartarus/repositories/<repo>`,
-the in-guest user lands in a tmux session on `tty1` with `claude`
-running inside it. The host TTY is attached to the guest serial
-console; type `Ctrl-A D` to detach without shutting the session down.
+The session boots, cloud-init clones the repo into
+`~/tartarus/repositories/<repo>`, and `claude agents` starts
+inside the VM. The host connects to the guest via SSH on an
+automatically allocated loopback port.
 
 To re-attach later:
 
 ```console
-tartarus resume <alias-or-uuid>
+tartarus connect <alias-or-uuid>
 ```
 
 To list everything that exists:

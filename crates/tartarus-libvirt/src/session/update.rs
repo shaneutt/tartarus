@@ -230,15 +230,33 @@ fn dispatch_and_wait(agent: &Agent) -> Result<UpdateStep> {
                 stderr,
                 stdout,
             };
-            match status.exit_code.unwrap_or(0) {
-                0 => {
+            match status.exit_code {
+                Some(0) => {
                     tracing::info!("update: orchestrator exited cleanly");
                     return Ok(step);
                 },
-                code => {
+                Some(code) => {
+                    tracing::warn!(
+                        code,
+                        stdout = %String::from_utf8_lossy(&step.stdout),
+                        stderr = %String::from_utf8_lossy(&step.stderr),
+                        "update orchestrator failed",
+                    );
                     return Err(HostError::AgentExecFailed {
                         code,
                         detail: "tartarus-update.sh exited non-zero",
+                    }
+                    .into());
+                },
+                None => {
+                    tracing::warn!(
+                        stdout = %String::from_utf8_lossy(&step.stdout),
+                        stderr = %String::from_utf8_lossy(&step.stderr),
+                        "update orchestrator killed by signal",
+                    );
+                    return Err(HostError::AgentExecFailed {
+                        code: -1,
+                        detail: "tartarus-update.sh killed by signal (no exit code)",
                     }
                     .into());
                 },

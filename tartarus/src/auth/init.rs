@@ -103,12 +103,20 @@ fn build_anthropic_config(github_token: String, anthropic_key: String) -> FileCo
     }
 }
 
-/// Prompt for a GitHub PAT; reject empty input.
+/// Prompt for a GitHub PAT; reject empty or unsafe input.
 fn collect_github_token<R: BufRead, W: Write>(reader: &mut R, writer: &mut W) -> Result<String> {
     let pasted = prompt::read_line(reader, writer, "GitHub personal access token (paste): ")?;
 
     if pasted.is_empty() {
         return Err(AuthError::GithubTokenMissing.into());
+    }
+
+    if !tartarus_provider::seed::input::is_safe_single_line(&pasted) {
+        return Err(AuthError::InteractiveReadFailed(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "token contains control characters; paste a clean single-line value",
+        ))
+        .into());
     }
 
     if !KNOWN_GITHUB_PREFIXES.iter().any(|p| pasted.starts_with(p)) {
@@ -131,6 +139,13 @@ fn collect_anthropic_key<R: BufRead, W: Write>(reader: &mut R, writer: &mut W) -
     )?;
 
     if !first.is_empty() {
+        if !tartarus_provider::seed::input::is_safe_single_line(&first) {
+            return Err(AuthError::InteractiveReadFailed(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "API key contains control characters; paste a clean single-line value",
+            ))
+            .into());
+        }
         return Ok(first);
     }
 
@@ -146,6 +161,14 @@ fn collect_anthropic_key<R: BufRead, W: Write>(reader: &mut R, writer: &mut W) -
 
     if pasted.is_empty() {
         return Err(AuthError::AnthropicKeyMissing.into());
+    }
+
+    if !tartarus_provider::seed::input::is_safe_single_line(&pasted) {
+        return Err(AuthError::InteractiveReadFailed(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "API key contains control characters; paste a clean single-line value",
+        ))
+        .into());
     }
 
     Ok(pasted)

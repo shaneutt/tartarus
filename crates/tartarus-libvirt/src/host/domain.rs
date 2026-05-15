@@ -165,7 +165,7 @@ pub struct SessionDomainSpec {
     pub gpu_quirks: crate::gpu::quirks::VendorQuirks,
 
     /// Loopback host port forwarded to guest port 22 for SSH.
-    pub ssh_hostfwd_port: Option<u16>,
+    pub ssh_hostfwd_port: u16,
 
     /// Memory in MiB.
     pub memory_mib: u32,
@@ -181,13 +181,14 @@ pub struct SessionDomainSpec {
 }
 
 impl SessionDomainSpec {
-    /// Build a [`SessionDomainSpec`] with the given compute resources.
+    /// Build a [`SessionDomainSpec`] with the given compute resources
+    /// and SSH port.
     pub fn new(
         name: impl Into<String>,
         overlay: impl Into<std::path::PathBuf>,
         seed_iso: impl Into<std::path::PathBuf>,
         memory_mib: u32,
-        vcpus: u32,
+        ssh_hostfwd_port: u16,
     ) -> Self {
         Self {
             name: name.into(),
@@ -196,14 +197,14 @@ impl SessionDomainSpec {
             memory_mib,
             overlay: overlay.into(),
             seed_iso: seed_iso.into(),
-            ssh_hostfwd_port: None,
-            vcpus,
+            ssh_hostfwd_port,
+            vcpus: 1,
         }
     }
 
-    /// Builder: enable SSH port forwarding to the guest.
-    pub fn with_ssh_hostfwd(mut self, host_port: u16) -> Self {
-        self.ssh_hostfwd_port = Some(host_port);
+    /// Builder: set the vCPU count.
+    pub fn with_vcpus(mut self, vcpus: u32) -> Self {
+        self.vcpus = vcpus;
         self
     }
 
@@ -511,12 +512,11 @@ fn push_session_devices(
     overlay: &str,
     seed_iso: &str,
     gpu: Option<&crate::gpu::PciAddress>,
-    ssh_hostfwd_port: Option<u16>,
+    ssh_hostfwd_port: u16,
 ) {
     xml.push_str("  <devices>\n");
     push_session_disks(xml, overlay, seed_iso);
     push_session_network(xml, ssh_hostfwd_port);
-    push_session_console(xml);
     push_session_qemu_ga_channel(xml);
     push_session_rng(xml);
     if let Some(addr) = gpu {
@@ -553,27 +553,15 @@ fn push_session_disks(xml: &mut String, overlay: &str, seed_iso: &str) {
     xml.push_str("    </disk>\n");
 }
 
-/// Push the SLIRP network interface, optionally with SSH port
-/// forwarding.
-fn push_session_network(xml: &mut String, ssh_hostfwd_port: Option<u16>) {
+/// Push the passt-backed network interface with SSH port forwarding.
+fn push_session_network(xml: &mut String, ssh_hostfwd_port: u16) {
     xml.push_str("    <interface type='user'>\n");
+    xml.push_str("      <backend type='passt'/>\n");
     xml.push_str("      <model type='virtio'/>\n");
-    if let Some(host_port) = ssh_hostfwd_port {
-        xml.push_str("      <portForward proto='tcp' address='127.0.0.1'>\n");
-        xml.push_str(&format!("        <range start='{host_port}' to='22'/>\n"));
-        xml.push_str("      </portForward>\n");
-    }
+    xml.push_str("      <portForward proto='tcp' address='127.0.0.1'>\n");
+    xml.push_str(&format!("        <range start='{ssh_hostfwd_port}' to='22'/>\n"));
+    xml.push_str("      </portForward>\n");
     xml.push_str("    </interface>\n");
-}
-
-/// Push the serial console PTY pair.
-fn push_session_console(xml: &mut String) {
-    xml.push_str("    <serial type='pty'>\n");
-    xml.push_str("      <target port='0'/>\n");
-    xml.push_str("    </serial>\n");
-    xml.push_str("    <console type='pty'>\n");
-    xml.push_str("      <target type='serial' port='0'/>\n");
-    xml.push_str("    </console>\n");
 }
 
 /// Push the `qemu-guest-agent` virtio-serial channel device.
@@ -823,7 +811,14 @@ mod tests {
 
     #[test]
     fn session_spec_passes_through_memory_and_vcpus() {
-        let spec = SessionDomainSpec::new("session-test", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso", 8_192, 4);
+        let spec = SessionDomainSpec::new(
+            "session-test",
+            "/tmp/overlay.qcow2",
+            "/tmp/cloud-init.iso",
+            8_192,
+            32000,
+        )
+        .with_vcpus(4);
 
         assert_eq!(spec.name, "session-test", "name should round-trip");
         assert_eq!(spec.memory_mib, 8_192, "memory_mib should round-trip");
@@ -832,7 +827,7 @@ mod tests {
 
     #[test]
     fn session_xml_attaches_overlay_as_virtio_vda() {
-        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso", 4_096, 2);
+        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso", 4_096, 32000).with_vcpus(2);
         let xml = spec.to_xml();
 
         assert!(
@@ -851,7 +846,7 @@ mod tests {
 
     #[test]
     fn session_xml_attaches_seed_iso_as_readonly_cdrom() {
-        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso", 4_096, 2);
+        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso", 4_096, 32000).with_vcpus(2);
         let xml = spec.to_xml();
 
         assert!(
@@ -870,30 +865,38 @@ mod tests {
 
     #[test]
     fn session_xml_includes_required_extra_devices() {
-        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso", 4_096, 2);
+        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso", 4_096, 32000).with_vcpus(2);
         let xml = spec.to_xml();
 
-        assert!(
-            xml.contains("<serial type='pty'>"),
-            "session XML should expose a serial console for P6 console attach, got: {xml}",
-        );
-        assert!(
-            xml.contains("<console type='pty'>"),
-            "session XML should expose the matching console device, got: {xml}",
-        );
         assert!(
             xml.contains("<rng model='virtio'>"),
             "session XML should include a virtio-rng device, got: {xml}",
         );
         assert!(
             xml.contains("<interface type='user'>"),
-            "session XML should use SLIRP usermode networking, got: {xml}",
+            "session XML should use usermode networking, got: {xml}",
+        );
+        assert!(
+            xml.contains("<backend type='passt'/>"),
+            "session XML should use the passt backend for port forwarding, got: {xml}",
+        );
+        assert!(
+            xml.contains("<portForward proto='tcp' address='127.0.0.1'>"),
+            "session XML should include SSH port forwarding, got: {xml}",
+        );
+        assert!(
+            xml.contains("<range start='32000' to='22'/>"),
+            "session XML should forward the allocated port to guest SSH, got: {xml}",
+        );
+        assert!(
+            !xml.contains("<serial type='pty'>"),
+            "session XML should not include a serial console (SSH-only mode), got: {xml}",
         );
     }
 
     #[test]
     fn session_xml_omits_hostdev_when_no_gpu_borrowed() {
-        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso", 4_096, 2);
+        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso", 4_096, 32000).with_vcpus(2);
         let xml = spec.to_xml();
 
         assert!(
@@ -905,7 +908,8 @@ mod tests {
     #[test]
     fn session_xml_emits_hostdev_with_managed_no_when_gpu_borrowed() {
         let address: crate::gpu::PciAddress = "0000:01:00.0".parse().expect("parse");
-        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso", 4_096, 2)
+        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso", 4_096, 32000)
+            .with_vcpus(2)
             .with_gpu(address, crate::gpu::quirks::VendorQuirks::default());
         let xml = spec.to_xml();
 
@@ -925,7 +929,8 @@ mod tests {
         let quirks = crate::gpu::quirks::VendorQuirks {
             apply_nvidia_hide_kvm: true,
         };
-        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso", 4_096, 2)
+        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso", 4_096, 32000)
+            .with_vcpus(2)
             .with_gpu(address, quirks);
         let xml = spec.to_xml();
 
@@ -946,7 +951,8 @@ mod tests {
     #[test]
     fn session_xml_omits_nvidia_quirk_when_inactive() {
         let address: crate::gpu::PciAddress = "0000:01:00.0".parse().expect("parse");
-        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso", 4_096, 2)
+        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso", 4_096, 32000)
+            .with_vcpus(2)
             .with_gpu(address, crate::gpu::quirks::VendorQuirks::default());
         let xml = spec.to_xml();
 
@@ -958,7 +964,7 @@ mod tests {
 
     #[test]
     fn session_xml_carries_qemu_guest_agent_channel() {
-        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso", 4_096, 2);
+        let spec = SessionDomainSpec::new("s", "/tmp/overlay.qcow2", "/tmp/cloud-init.iso", 4_096, 32000).with_vcpus(2);
         let xml = spec.to_xml();
 
         assert!(

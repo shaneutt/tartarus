@@ -42,7 +42,7 @@ impl Verbosity {
             Verbosity::Quiet => Some("error"),
             Verbosity::Default => None,
             Verbosity::Info => Some("tartarus=info,warn"),
-            Verbosity::Debug => Some("tartarus=debug,info"),
+            Verbosity::Debug => Some("tartarus=debug,warn"),
         }
     }
 }

@@ -110,12 +110,12 @@ fn bootstrap_unit_targets_correct_executable() {
 }
 
 #[test]
-fn claude_unit_runs_on_tty1_as_template_user() {
+fn claude_unit_runs_as_template_user_without_tty() {
     let unit = std::fs::read_to_string(workspace_root().join("guest/systemd/tartarus-claude@.service"))
         .expect("read claude unit");
     assert!(
-        unit.contains("TTYPath=/dev/tty1"),
-        "tartarus-claude@.service should bind to /dev/tty1, got: {unit}",
+        !unit.contains("TTYPath"),
+        "tartarus-claude@.service should not bind to a TTY (SSH-only mode), got: {unit}",
     );
     assert!(
         unit.contains("User=%i"),

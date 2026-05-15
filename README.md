@@ -30,6 +30,9 @@ via the upstream [virt] crate.
   not used.
 - `libvirt-dev` (Debian/Ubuntu) or `libvirt-devel` (Fedora/RHEL)
   headers at build time on Linux; `brew install libvirt` on macOS.
+- `passt` on `PATH` for user-mode networking with port
+  forwarding. Install: `dnf install passt` (Fedora/RHEL)
+  or `apt install passt` (Debian/Ubuntu).
 - `qemu-utils` (Debian/Ubuntu) or `qemu-img` (Fedora/RHEL) on
   `PATH` for overlay management.
 - `genisoimage` (or `xorrisofs`) on `PATH` for cloud-init seed

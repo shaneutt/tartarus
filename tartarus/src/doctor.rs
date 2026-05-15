@@ -24,7 +24,7 @@ use crate::{config::Config, error::Result};
 const MAX_FAILURE_EXIT_CODE: u8 = u8::MAX;
 
 /// Required external tools verified on `PATH`.
-const REQUIRED_TOOLS: &[&str] = &["genisoimage", "gpgv", "qemu-img"];
+const REQUIRED_TOOLS: &[&str] = &["genisoimage", "gpgv", "passt", "qemu-img"];
 
 /// HEAD probe URL for the Fedora egress check.
 const FEDORA_EGRESS_PROBE_URL: &str = "https://download.fedoraproject.org/";
@@ -609,12 +609,27 @@ fn which_on_path(name: &str) -> Option<PathBuf> {
 
     for dir in std::env::split_paths(&path_var) {
         let candidate = dir.join(name);
-        if candidate.is_file() {
+        if candidate.is_file() && is_executable(&candidate) {
             return Some(candidate);
         }
     }
 
     None
+}
+
+/// Check whether `path` has at least one execute bit set.
+#[cfg(unix)]
+fn is_executable(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    path.metadata()
+        .map(|m| m.permissions().mode() & 0o111 != 0)
+        .unwrap_or(false)
+}
+
+/// Non-Unix shim: assume executable if the file exists.
+#[cfg(not(unix))]
+fn is_executable(_path: &Path) -> bool {
+    true
 }
 
 // -----------------------------------------------------------------------------

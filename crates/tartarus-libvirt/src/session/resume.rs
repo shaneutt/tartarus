@@ -1,12 +1,12 @@
-//! `tartarus resume`: re-attach to an existing session.
+//! `tartarus resume`: re-attach to an existing session via SSH.
 //!
-//! Resolves the target, starts the domain if shut off, attaches the
-//! serial console, and updates `last_attached_at`.
+//! Resolves the target, starts the domain if shut off, attaches over
+//! SSH, and updates `last_attached_at`.
 
 use tartarus_provider::{
     ResumeOutcome,
     session::{
-        identity,
+        SessionError, identity,
         metadata::{self, Metadata},
     },
 };
@@ -14,7 +14,8 @@ use tartarus_provider::{
 use crate::{
     config::Config,
     error::Result,
-    host::{connect::Connection, console, domain, error::HostError},
+    host::{connect::Connection, domain, error::HostError},
+    session::{ssh, ssh_attach},
 };
 
 /// Run `tartarus resume <alias|uuid>`.
@@ -22,11 +23,20 @@ pub fn run(config: &Config, target: &str) -> Result<ResumeOutcome> {
     let resolved = identity::resolve(target)?;
     tracing::info!(uuid = %resolved.uuid, alias = ?resolved.alias, "resuming session");
 
+    let metadata_path = resolved.directory.join(metadata::METADATA_FILE_NAME);
+    let metadata = Metadata::load(&metadata_path)?;
+    let port = metadata.ssh_port.ok_or_else(|| SessionError::SshPortMissing {
+        uuid: resolved.uuid.clone(),
+    })?;
+
     let connection = Connection::open(&config.network_uri)?;
     let started_from_shutoff = ensure_running(&connection, &resolved.uuid)?;
 
-    let domain = domain::lookup(&connection, &resolved.uuid)?;
-    let _reason = console::attach(&domain)?;
+    let layout = ssh::SessionSshLayout::for_session(&resolved.directory);
+    if !layout.known_hosts.exists() {
+        ssh_attach::capture_host_key(config, &resolved.uuid, &layout, port)?;
+    }
+    ssh_attach::exec_ssh(config, &layout, port, &resolved.uuid, &[])?;
 
     update_last_attached(&resolved.directory)?;
 
@@ -46,7 +56,7 @@ where
     S: FnOnce(&str) -> Result<()>,
 {
     if is_active_fn(uuid)? {
-        tracing::debug!(uuid, "session already running; attaching to live console");
+        tracing::debug!(uuid, "session already running; attaching via SSH");
         return Ok(false);
     }
 

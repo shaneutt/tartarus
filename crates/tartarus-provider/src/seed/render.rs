@@ -862,4 +862,23 @@ mod tests {
         let yaml = "users:\n  - name: x\nwrite_files:\n  - path: /etc/example\n    content: |\n      first line\n      second line\nfoo: bar\n";
         check_yaml_structure(yaml).expect("block scalars must validate cleanly");
     }
+
+    #[test]
+    fn env_files_use_key_equals_value_format() {
+        let seed = anthropic_seed("(unnamed)");
+        let docs = render(&seed);
+
+        assert!(
+            docs.user_data.contains("GITHUB_TOKEN=ghp_test"),
+            "env file should contain KEY=VALUE format for GITHUB_TOKEN",
+        );
+        assert!(
+            docs.user_data.contains("CLAUDE_MODEL=claude-opus-4-7"),
+            "env file should contain KEY=VALUE format for CLAUDE_MODEL",
+        );
+        assert!(
+            docs.user_data.contains("ANTHROPIC_API_KEY=sk-ant-test"),
+            "env file should contain KEY=VALUE format for ANTHROPIC_API_KEY",
+        );
+    }
 }

@@ -1,12 +1,11 @@
 #!/bin/bash
-# tartarus-claude.sh — launch tmux + claude on tty1 in the default repo.
+# tartarus-claude.sh — launch claude agents in the default repo.
 
 set -euo pipefail
 
 WRAPPER="${WRAPPER:-/usr/local/bin/tartarus-env-wrapper.sh}"
 WORKDIR_BASE="${WORKDIR_BASE:-${HOME}/tartarus/repositories}"
 REPOS_MANIFEST="${REPOS_MANIFEST:-/etc/tartarus/repos}"
-TMUX_SESSION="${TMUX_SESSION:-work}"
 
 log() {
     printf '[ tartarus-claude ] %s\n' "$*" >&2
@@ -40,8 +39,9 @@ default_repo_dir() {
 main() {
     local cwd
     cwd="$(default_repo_dir)"
-    log "starting tmux session '${TMUX_SESSION}' cd'd to ${cwd}"
-    exec tmux new-session -As "${TMUX_SESSION}" -c "${cwd}" "${WRAPPER}" claude
+    log "starting claude agents in ${cwd}"
+    cd "${cwd}"
+    exec "${WRAPPER}" claude agents
 }
 
 if [[ "${BASH_SOURCE[0]:-$0}" == "${0}" ]]; then

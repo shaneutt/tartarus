@@ -128,6 +128,20 @@ pub enum SessionError {
         end: u16,
     },
 
+    /// SSH attach to the guest session failed.
+    #[error("ssh attach failed: {detail}")]
+    SshAttachFailed {
+        /// Human-readable description of the failure.
+        detail: String,
+    },
+
+    /// Session metadata has no SSH port recorded.
+    #[error("session {uuid} has no ssh_port in metadata; the session predates SSH-first mode")]
+    SshPortMissing {
+        /// UUID of the session missing an SSH port.
+        uuid: String,
+    },
+
     /// Guest SSH host key could not be read via `qemu-guest-agent`.
     #[error("could not read the guest's SSH host key after {attempts} attempts: {detail}")]
     SshHostKeyUnavailable {

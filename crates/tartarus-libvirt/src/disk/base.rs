@@ -452,6 +452,7 @@ fn pull_with_in<D: Deps + ?Sized>(release: &str, deps: &D, base_dir: &Path) -> R
 
     tracing::info!(?workdir, "cleaning layering workdir");
     workdir_guard.disarm();
+    let _ = std::fs::remove_dir_all(&workdir);
     drop(workdir_guard);
 
     Base::from_name(base_dir, &final_name)

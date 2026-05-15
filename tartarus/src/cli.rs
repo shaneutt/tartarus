@@ -85,10 +85,15 @@ pub enum Command {
         name: String,
     },
 
-    /// Re-attach to an existing session.
+    /// Re-attach to an existing session via SSH.
     Resume {
         /// Alias or UUID identifying the session.
         target: String,
+
+        /// Verbatim arguments forwarded to `ssh`. Everything after
+        /// `--` lands here.
+        #[arg(last = true)]
+        ssh_args: Vec<String>,
     },
 
     /// Start a new session.
@@ -122,14 +127,6 @@ pub enum Command {
         /// in `config.toml`. Also reads `TARTARUS_BASE_ENVS`.
         #[arg(long, value_delimiter = ',', env = "TARTARUS_BASE_ENVS")]
         env: Vec<String>,
-
-        /// Read the GitHub PAT from stdin instead of the config.
-        #[arg(long)]
-        github_token_stdin: bool,
-
-        /// Read the Anthropic API key from stdin instead of the config.
-        #[arg(long)]
-        anthropic_key_stdin: bool,
 
         /// Detached mode: start the session and return without
         /// attaching the console. Re-attach later via `tartarus
@@ -181,13 +178,13 @@ pub enum Command {
     #[command(subcommand)]
     Host(HostCommand),
 
-    /// Attach to a running session over SSH.
+    /// Connect to a running session over SSH.
     ///
-    /// Use `tartarus ssh <alias|uuid>` for an interactive shell.
-    /// Anything after the literal `--` separator is forwarded
-    /// verbatim to `ssh`, e.g. `tartarus ssh foo -- -L
-    /// 8080:localhost:8080` for a port forward.
-    Ssh {
+    /// Use `tartarus connect <alias|uuid>` for an interactive
+    /// shell. Anything after the literal `--` separator is
+    /// forwarded verbatim to `ssh`, e.g. `tartarus connect foo
+    /// -- -L 8080:localhost:8080` for a port forward.
+    Connect {
         /// Alias or UUID identifying the session.
         target: String,
 
@@ -364,7 +361,7 @@ pub fn run(cli: Cli, config: Option<Config>) -> Result<()> {
         Command::Grow { target } => dispatch_grow(config, &target),
         Command::List => dispatch_list(config),
         Command::Rename { uuid, name } => dispatch_rename(config, &uuid, &name),
-        Command::Resume { target } => dispatch_resume(config, &target),
+        Command::Resume { target, ssh_args } => dispatch_connect(config, target, ssh_args),
         Command::Host(cmd) => dispatch_host(cmd),
         Command::Run {
             repo,
@@ -390,14 +387,14 @@ pub fn run(cli: Cli, config: Option<Config>) -> Result<()> {
             },
         ),
         Command::Set { target, memory, vcpus } => dispatch_set(config, &target, memory, vcpus),
-        Command::Ssh { target, ssh_args } => dispatch_ssh(config, target, ssh_args),
+        Command::Connect { target, ssh_args } => dispatch_connect(config, target, ssh_args),
         Command::Stop { target } => dispatch_stop(config, &target),
         Command::Update { target } => dispatch_update(config, &target),
     }
 }
 
-/// Dispatch the `tartarus ssh <alias|uuid> [-- <args>]` subcommand.
-fn dispatch_ssh(config: Option<Config>, target: String, ssh_args: Vec<String>) -> Result<()> {
+/// Dispatch `tartarus connect` / `tartarus resume`.
+fn dispatch_connect(config: Option<Config>, target: String, ssh_args: Vec<String>) -> Result<()> {
     let config = require_config(config)?;
     let request = tartarus_libvirt::session::ssh_attach::AttachRequest {
         target,
@@ -704,18 +701,6 @@ fn dispatch_grow(config: Option<Config>, target: &str) -> Result<()> {
         before = outcome.before_gib,
         after = outcome.after_gib,
     );
-
-    Ok(())
-}
-
-/// Dispatch the `tartarus resume <alias|uuid>` subcommand.
-fn dispatch_resume(config: Option<Config>, target: &str) -> Result<()> {
-    use tartarus_provider::SessionProvider;
-
-    let config = require_config(config)?;
-    let provider = crate::provider::Provider::from_config_for_lifecycle(config)?;
-    let outcome = provider.resume(target)?;
-    tracing::info!(uuid = %outcome.uuid, started = outcome.started_from_shutoff, "resume complete");
 
     Ok(())
 }

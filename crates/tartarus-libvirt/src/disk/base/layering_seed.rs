@@ -154,6 +154,7 @@ const GUEST_UNITS: &[(&str, &str)] = &[
 /// Units enabled by cloud-init's `runcmd` block.
 const ENABLE_UNITS: &[&str] = &[
     "qemu-guest-agent.service",
+    "sshd.service",
     "tartarus-bootstrap.service",
     "tartarus-fstrim.service",
     "tartarus-grow.timer",
@@ -163,8 +164,8 @@ const ENABLE_UNITS: &[&str] = &[
 const LAYER_PACKAGES: &[&str] = &[
     "git",
     "gh",
-    "tmux",
     "golang",
+    "openssh-server",
     "python3",
     "python3-virtualenv",
     "python3-pip",
@@ -266,6 +267,8 @@ fn render_user_data() -> String {
     for unit in ENABLE_UNITS {
         out.push_str(&format!("  - systemctl enable {unit}\n"));
     }
+    out.push_str("  - firewall-cmd --permanent --add-service=ssh || true\n");
+    out.push_str("  - firewall-cmd --reload || true\n");
     out.push_str("  - poweroff\n");
     out.push('\n');
 
@@ -331,8 +334,8 @@ mod tests {
         for pkg in [
             "git",
             "gh",
-            "tmux",
             "golang",
+            "openssh-server",
             "python3",
             "python3-virtualenv",
             "rustup",
@@ -370,6 +373,10 @@ mod tests {
         assert!(
             user_data.contains("systemctl enable qemu-guest-agent.service"),
             "qemu-guest-agent must be enabled by the layering seed (it is the host->guest control channel), got: {user_data}",
+        );
+        assert!(
+            user_data.contains("systemctl enable sshd.service"),
+            "sshd must be enabled by the layering seed (SSH is the primary connection method), got: {user_data}",
         );
     }
 

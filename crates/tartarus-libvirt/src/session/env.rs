@@ -160,14 +160,19 @@ fn dispatch_and_wait(agent: &Agent, script: &str, args: &[String]) -> Result<()>
     loop {
         let status = agent.exec_status(&handle, AGENT_CALL_TIMEOUT)?;
         if status.exited {
-            return match status.exit_code.unwrap_or(0) {
-                0 => {
+            return match status.exit_code {
+                Some(0) => {
                     tracing::info!(script, "env: orchestrator exited cleanly");
                     Ok(())
                 },
-                code => Err(HostError::AgentExecFailed {
+                Some(code) => Err(HostError::AgentExecFailed {
                     code,
                     detail: "tartarus-env-*.sh exited non-zero",
+                }
+                .into()),
+                None => Err(HostError::AgentExecFailed {
+                    code: -1,
+                    detail: "tartarus-env-*.sh killed by signal (no exit code)",
                 }
                 .into()),
             };

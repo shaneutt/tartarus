@@ -87,7 +87,7 @@ pub fn run(config: &Config, request: &AttachRequest) -> Result<AttachOutcome> {
 // -----------------------------------------------------------------------------
 
 /// Read the guest host key via `qemu-guest-agent` and persist it.
-fn capture_host_key(config: &Config, uuid: &str, layout: &SessionSshLayout, port: u16) -> Result<()> {
+pub(crate) fn capture_host_key(config: &Config, uuid: &str, layout: &SessionSshLayout, port: u16) -> Result<()> {
     let connection = Connection::open(&config.network_uri)?;
     let domain = virt::domain::Domain::lookup_by_name(connection.inner(), uuid).map_err(|source| {
         crate::host::error::HostError::DomainOperation {
@@ -132,7 +132,7 @@ fn capture_host_key(config: &Config, uuid: &str, layout: &SessionSshLayout, port
 }
 
 /// Exec `ssh` with per-session credentials. Returns only on failure.
-fn exec_ssh(
+pub(crate) fn exec_ssh(
     config: &Config,
     layout: &SessionSshLayout,
     port: u16,
@@ -176,8 +176,7 @@ fn exec_ssh(
     if status.success() {
         Ok(outcome)
     } else {
-        Err(SessionError::SshHostKeyUnavailable {
-            attempts: 0,
+        Err(SessionError::SshAttachFailed {
             detail: format!("ssh exited with {status}"),
         }
         .into())

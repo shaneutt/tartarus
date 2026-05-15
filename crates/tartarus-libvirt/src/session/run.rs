@@ -28,10 +28,10 @@ use crate::{
     error::{Error, Result},
     host::{
         connect::Connection,
-        console,
         domain::{self, SessionDomainSpec},
     },
     seed::iso,
+    session::{ssh, ssh_attach},
 };
 
 // -----------------------------------------------------------------------------
@@ -94,7 +94,7 @@ pub fn run(config: &Config, request: &RunRequest) -> Result<RunOutcome> {
             memory_mib: config.vm_memory_mib,
             overlay: &overlay.path,
             seed_iso: &seed_iso,
-            ssh_hostfwd_port: Some(ssh_port),
+            ssh_hostfwd_port: ssh_port,
             uuid: &uuid,
             vcpus: config.vm_vcpus,
         },
@@ -142,7 +142,14 @@ pub fn run(config: &Config, request: &RunRequest) -> Result<RunOutcome> {
 
     tracing::info!(uuid = %uuid, alias = ?request.name, ?mode, "session started");
 
-    let remote_url = route_post_start(config, &connection, &uuid, mode, &metadata_path);
+    let remote_url = route_post_start(&PostStartInputs {
+        config,
+        metadata_path: &metadata_path,
+        mode,
+        session_dir: &session_dir,
+        ssh_port,
+        uuid: &uuid,
+    });
 
     Ok(RunOutcome {
         alias: request.name.clone(),
@@ -326,37 +333,52 @@ fn create_dir_owner_only(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Parameters for [`route_post_start`].
+struct PostStartInputs<'a> {
+    config: &'a Config,
+    metadata_path: &'a Path,
+    mode: RunMode,
+    session_dir: &'a Path,
+    ssh_port: u16,
+    uuid: &'a str,
+}
+
 /// Route control after the domain is running.
 ///
 /// Errors are logged rather than propagated; the session is alive.
-fn route_post_start(
-    config: &Config,
-    connection: &Connection,
-    uuid: &str,
-    mode: RunMode,
-    metadata_path: &Path,
-) -> Option<String> {
+fn route_post_start(inputs: &PostStartInputs<'_>) -> Option<String> {
+    let PostStartInputs {
+        config,
+        metadata_path,
+        mode,
+        session_dir,
+        ssh_port,
+        uuid,
+    } = inputs;
     match mode {
-        RunMode::Foreground => match domain::lookup(connection, uuid) {
-            Ok(domain) => match console::attach(&domain) {
-                Ok(_reason) => None,
+        RunMode::Foreground => {
+            let layout = ssh::SessionSshLayout::for_session(session_dir);
+            match ssh_attach::capture_host_key(config, uuid, &layout, *ssh_port) {
+                Ok(()) => match ssh_attach::exec_ssh(config, &layout, *ssh_port, uuid, &[]) {
+                    Ok(_outcome) => None,
+                    Err(err) => {
+                        tracing::warn!(
+                            %uuid,
+                            %err,
+                            "session is running but SSH attach failed; reattach with `tartarus connect`",
+                        );
+                        None
+                    },
+                },
                 Err(err) => {
                     tracing::warn!(
                         %uuid,
                         %err,
-                        "session is running but console attach failed; reattach with `tartarus resume`",
+                        "session is running but SSH host key capture failed; reattach with `tartarus connect`",
                     );
                     None
                 },
-            },
-            Err(err) => {
-                tracing::warn!(
-                    %uuid,
-                    %err,
-                    "session is running but post-start domain lookup failed; reattach with `tartarus resume`",
-                );
-                None
-            },
+            }
         },
         RunMode::Detached => None,
         RunMode::Background => match probe_remote_url(config, uuid) {
@@ -435,13 +457,11 @@ fn write_domain_xml(session_dir: &Path, inputs: DomainXmlInputs<'_>) -> Result<(
         inputs.overlay,
         inputs.seed_iso,
         inputs.memory_mib,
-        inputs.vcpus,
-    );
+        inputs.ssh_hostfwd_port,
+    )
+    .with_vcpus(inputs.vcpus);
     if let Some((addr, quirks)) = inputs.gpu {
         spec = spec.with_gpu(addr.clone(), *quirks);
-    }
-    if let Some(port) = inputs.ssh_hostfwd_port {
-        spec = spec.with_ssh_hostfwd(port);
     }
     let xml = spec.to_xml();
 
@@ -457,7 +477,7 @@ struct DomainXmlInputs<'a> {
     memory_mib: u32,
     overlay: &'a Path,
     seed_iso: &'a Path,
-    ssh_hostfwd_port: Option<u16>,
+    ssh_hostfwd_port: u16,
     uuid: &'a str,
     vcpus: u32,
 }

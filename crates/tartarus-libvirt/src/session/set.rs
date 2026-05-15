@@ -232,11 +232,10 @@ fn apply_stopped(session_dir: &Path, uuid: &str, metadata: &Metadata, memory_mib
     let overlay = session_dir.join("overlay.qcow2");
     let seed_iso = session_dir.join("cloud-init.iso");
 
-    let mut spec = SessionDomainSpec::new(uuid, &overlay, &seed_iso, memory_mib, vcpus);
-
-    if let Some(port) = metadata.ssh_port {
-        spec = spec.with_ssh_hostfwd(port);
-    }
+    let ssh_port = metadata
+        .ssh_port
+        .ok_or_else(|| SessionError::SshPortMissing { uuid: uuid.to_owned() })?;
+    let mut spec = SessionDomainSpec::new(uuid, &overlay, &seed_iso, memory_mib, ssh_port).with_vcpus(vcpus);
 
     if let Some(ref borrow) = metadata.gpu_borrow {
         let address: crate::gpu::PciAddress = borrow.address.parse()?;
