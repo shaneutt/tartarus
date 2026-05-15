@@ -230,6 +230,7 @@ mod tests {
             base_envs: vec!["rust".to_owned()],
             base_repos: vec![],
             claude_backend: Backend::Anthropic,
+            claude_enabled: true,
             claude_anthropic_api_key: Some("sk-ant-test".to_owned()),
             claude_effort: "high".to_owned(),
             claude_model: "claude-opus-4-7".to_owned(),

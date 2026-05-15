@@ -8,7 +8,7 @@
 
 use std::path::{Path, PathBuf};
 
-use tartarus_provider::seed::input::{ClaudeDefaults, CredentialBundle, Credentials, RepoSpec, Seed, SeedInputs};
+use tartarus_provider::seed::input::{ClaudeCredentials, ClaudeDefaults, CredentialBundle, RepoSpec, Seed, SeedInputs};
 
 use crate::{
     config::{Backend, Config},
@@ -50,12 +50,22 @@ pub enum SeedBuilderError {
 /// Build a [`Seed`] from a resolved config, per-run inputs, and an
 /// optional alias.
 ///
-/// Returns `Ok(None)` when credentials or repos are missing.
+/// Returns `Ok(None)` when the GitHub token or repos are missing.
 /// Returns `Err` when the Vertex SA file cannot be read.
 pub fn build_seed(config: &Config, alias: Option<&str>, inputs: SeedInputs) -> Result<Option<Seed>> {
-    let Some(credentials) = build_credentials(config)? else {
+    let claude = if config.claude_enabled {
+        let Some(creds) = build_claude_credentials(config)? else {
+            return Ok(None);
+        };
+        Some(creds)
+    } else {
+        None
+    };
+
+    let Some(github_token) = config.github_token.clone() else {
         return Ok(None);
     };
+
     let name = alias.map_or_else(|| "(unnamed)".to_owned(), str::to_owned);
 
     let Some(repos) = resolve_repos(&inputs, config) else {
@@ -64,8 +74,9 @@ pub fn build_seed(config: &Config, alias: Option<&str>, inputs: SeedInputs) -> R
 
     Ok(Some(Seed {
         name,
-        credentials,
+        claude,
         envs: config.base_envs.clone(),
+        github_token,
         remote_connect: inputs.remote_connect,
         repos,
         ssh_pubkey: inputs.ssh_pubkey,
@@ -108,9 +119,9 @@ fn resolve_repos(inputs: &SeedInputs, config: &Config) -> Option<Vec<RepoSpec>> 
     )
 }
 
-/// Assemble [`Credentials`] from the resolved config. Returns
-/// `Ok(None)` when required fields are missing.
-fn build_credentials(config: &Config) -> Result<Option<Credentials>> {
+/// Assemble [`ClaudeCredentials`] from the resolved config. Returns
+/// `Ok(None)` when required Claude fields are missing.
+fn build_claude_credentials(config: &Config) -> Result<Option<ClaudeCredentials>> {
     let backend = match config.claude_backend {
         Backend::Anthropic => {
             let Some(api_key) = config.claude_anthropic_api_key.clone() else {
@@ -135,17 +146,12 @@ fn build_credentials(config: &Config) -> Result<Option<Credentials>> {
         },
     };
 
-    let Some(github_token) = config.github_token.clone() else {
-        return Ok(None);
-    };
-
-    Ok(Some(Credentials {
+    Ok(Some(ClaudeCredentials {
         backend,
-        claude: ClaudeDefaults {
+        defaults: ClaudeDefaults {
             effort: config.claude_effort.clone(),
             model: config.claude_model.clone(),
         },
-        github_token,
     }))
 }
 
@@ -189,7 +195,8 @@ mod tests {
         assert!(!seed.remote_connect, "remote_connect should default off");
         assert_eq!(seed.repos.len(), 1, "single-repo invocation should yield one RepoSpec",);
         assert!(seed.repos[0].default, "the only repo should be marked default");
-        match seed.credentials.backend {
+        let claude = seed.claude.expect("claude should be populated");
+        match claude.backend {
             CredentialBundle::Anthropic { api_key } => {
                 assert_eq!(api_key, "sk-ant-test", "anthropic key should round-trip");
             },
@@ -362,6 +369,7 @@ mod tests {
             base_envs: vec!["rust".to_owned()],
             base_repos: vec![],
             claude_backend: Backend::Anthropic,
+            claude_enabled: true,
             claude_anthropic_api_key: Some("sk-ant-test".to_owned()),
             claude_effort: "high".to_owned(),
             claude_model: "claude-opus-4-7".to_owned(),

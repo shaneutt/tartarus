@@ -970,7 +970,7 @@ fn download_to_file(url: &str, dest: &Path, timeout_secs: u64, max_bytes: Option
 /// The pull flow GPG-verifies the CHECKSUM manifest with `keyring`
 /// before this function runs, so the bytes we persist are already
 /// known-good. Persisting the key makes the trust anchor available to
-/// [`crate::doctor`] (and any future re-verification path) without
+/// the doctor diagnostic (and any future re-verification path) without
 /// re-fetching from the network. The destination is overwritten on
 /// each pull so a key rotation upstream lands cleanly.
 ///

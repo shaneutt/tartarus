@@ -9,4 +9,4 @@
 pub mod input;
 pub mod render;
 
-pub use input::{ClaudeDefaults, CredentialBundle, Credentials, RepoSpec, Seed, SeedInputs};
+pub use input::{ClaudeCredentials, ClaudeDefaults, CredentialBundle, RepoSpec, Seed, SeedInputs};

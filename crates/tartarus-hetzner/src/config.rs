@@ -1,4 +1,4 @@
-//! Hetzner-specific configuration consumed by [`HetznerProvider`].
+//! Hetzner-specific configuration consumed by [`crate::provider::HetznerProvider`].
 //!
 //! The binary's TOML config gains a `[hetzner]` section the binary
 //! parses; this crate is handed the resulting [`HetznerConfig`].

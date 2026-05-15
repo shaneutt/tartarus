@@ -160,6 +160,11 @@ pub enum Command {
         #[arg(long, value_name = "COUNT", env = "TARTARUS_VCPUS")]
         vcpus: Option<u32>,
 
+        /// Skip Claude installation and startup. The VM boots with
+        /// GitHub credentials for repo access but without Claude Code.
+        #[arg(long)]
+        no_claude: bool,
+
         /// Run this single session under `qemu:///system` (root libvirtd)
         /// instead of `qemu:///session`.
         ///
@@ -565,12 +570,16 @@ pub fn cli_overrides(cli: &Cli) -> CliOverrides {
         repo,
         default_repo,
         memory,
+        no_claude,
         vcpus,
         ..
     } = &cli.command
     {
         overrides.vm_memory_mib = *memory;
         overrides.vm_vcpus = *vcpus;
+        if *no_claude {
+            overrides.claude_enabled = Some(false);
+        }
         if !env.is_empty() {
             overrides.base_envs = Some(env.clone());
         }

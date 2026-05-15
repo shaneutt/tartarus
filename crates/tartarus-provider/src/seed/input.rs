@@ -80,25 +80,23 @@ pub struct ClaudeDefaults {
     pub model: String,
 }
 
-/// Seed credentials bundle.
+/// Claude credentials: backend API key plus runtime defaults.
+///
+/// Present in [`Seed`] only when Claude is enabled for the session.
 #[derive(Clone, Eq, PartialEq)]
-pub struct Credentials {
+pub struct ClaudeCredentials {
     /// Active Claude backend bundle.
     pub backend: CredentialBundle,
 
     /// Claude runtime defaults (model, effort).
-    pub claude: ClaudeDefaults,
-
-    /// GitHub PAT for `gh` and `git clone`.
-    pub github_token: String,
+    pub defaults: ClaudeDefaults,
 }
 
-impl fmt::Debug for Credentials {
+impl fmt::Debug for ClaudeCredentials {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Credentials")
+        f.debug_struct("ClaudeCredentials")
             .field("backend", &self.backend)
-            .field("claude", &self.claude)
-            .field("github_token", &"[REDACTED]")
+            .field("defaults", &self.defaults)
             .finish()
     }
 }
@@ -110,11 +108,14 @@ pub struct Seed {
     /// `local-hostname`.
     pub name: String,
 
-    /// Credentials bundle.
-    pub credentials: Credentials,
+    /// Claude credentials, or `None` when `--no-claude` is set.
+    pub claude: Option<ClaudeCredentials>,
 
     /// Programming envs to activate at first boot.
     pub envs: Vec<String>,
+
+    /// GitHub PAT for `gh` and `git clone`.
+    pub github_token: String,
 
     /// Enable Claude remote-connect mode (background sessions).
     pub remote_connect: bool,
@@ -136,8 +137,9 @@ impl fmt::Debug for Seed {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Seed")
             .field("name", &self.name)
-            .field("credentials", &self.credentials)
+            .field("claude", &self.claude)
             .field("envs", &self.envs)
+            .field("github_token", &"[REDACTED]")
             .field("remote_connect", &self.remote_connect)
             .field("repos", &self.repos)
             .field("ssh_pubkey", &self.ssh_pubkey.as_deref().map(|_| "[REDACTED]"))

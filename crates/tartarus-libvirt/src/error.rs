@@ -6,7 +6,7 @@
 //! provider-shared errors (I/O, config, session-shape) coming up
 //! from [`tartarus_provider::Error`].
 //!
-//! The binary's top-level [`tartarus::error::Error`] in turn wraps
+//! The binary's top-level `tartarus::error::Error` in turn wraps
 //! `Error` from this crate (via a manual `From` that flattens) so
 //! the user-visible message stays one transparent variant deep.
 

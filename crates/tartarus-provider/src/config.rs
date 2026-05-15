@@ -189,6 +189,9 @@ pub struct Config {
     /// Selected Claude backend.
     pub claude_backend: Backend,
 
+    /// Whether Claude is installed and launched in the session.
+    pub claude_enabled: bool,
+
     /// Anthropic API key (when backend is [`Backend::Anthropic`]).
     pub claude_anthropic_api_key: Option<String>,
 
@@ -305,6 +308,7 @@ impl fmt::Debug for Config {
             .field("base_envs", &self.base_envs)
             .field("base_repos", &self.base_repos)
             .field("claude_backend", &self.claude_backend)
+            .field("claude_enabled", &self.claude_enabled)
             .field(
                 "claude_anthropic_api_key",
                 &self.claude_anthropic_api_key.as_ref().map(|_| "[REDACTED]"),
@@ -349,6 +353,7 @@ impl Config {
             base_envs: cli.base_envs.or(file.base.envs).unwrap_or_else(default_base_envs),
             base_repos: cli.base_repos.or(file.base.repos).unwrap_or_default(),
             claude_backend: cli.claude_backend.or(claude.backend).unwrap_or(Backend::Anthropic),
+            claude_enabled: cli.claude_enabled.or(claude.enabled).unwrap_or(true),
             claude_anthropic_api_key: cli.claude_anthropic_api_key.or(anthropic.api_key),
             claude_effort: cli
                 .claude_effort
@@ -430,7 +435,9 @@ impl Config {
         }
 
         validate_user_identity(self)?;
-        validate_backend_credentials(self)?;
+        if self.claude_enabled {
+            validate_backend_credentials(self)?;
+        }
         validate_repos(self)?;
         validate_seed_input_strings(self)?;
 
@@ -529,6 +536,9 @@ pub struct ClaudeSection {
     /// Backend selector.
     pub backend: Option<Backend>,
 
+    /// Whether Claude is installed and launched in the session.
+    pub enabled: Option<bool>,
+
     /// Effort tier (e.g. `"low"`, `"high"`).
     pub effort: Option<String>,
 
@@ -544,6 +554,7 @@ impl fmt::Debug for ClaudeSection {
         f.debug_struct("ClaudeSection")
             .field("anthropic", &self.anthropic)
             .field("backend", &self.backend)
+            .field("enabled", &self.enabled)
             .field("effort", &self.effort)
             .field("model", &self.model)
             .field("vertex", &self.vertex)
@@ -674,6 +685,9 @@ pub struct CliOverrides {
     /// Override for `[claude] backend`.
     pub claude_backend: Option<Backend>,
 
+    /// Override for `[claude] enabled`.
+    pub claude_enabled: Option<bool>,
+
     /// Override for `[claude] effort`.
     pub claude_effort: Option<String>,
 
@@ -722,6 +736,7 @@ impl fmt::Debug for CliOverrides {
                 &self.claude_anthropic_api_key.as_ref().map(|_| "[REDACTED]"),
             )
             .field("claude_backend", &self.claude_backend)
+            .field("claude_enabled", &self.claude_enabled)
             .field("claude_effort", &self.claude_effort)
             .field("claude_model", &self.claude_model)
             .field("claude_vertex_credentials_file", &self.claude_vertex_credentials_file)
@@ -908,17 +923,19 @@ fn validate_seed_input_strings(config: &Config) -> Result<()> {
     if let Some(token) = &config.github_token {
         single_line("[github] token", token)?;
     }
-    if let Some(api_key) = &config.claude_anthropic_api_key {
-        single_line("[claude.anthropic] api_key", api_key)?;
+    if config.claude_enabled {
+        if let Some(api_key) = &config.claude_anthropic_api_key {
+            single_line("[claude.anthropic] api_key", api_key)?;
+        }
+        if let Some(project_id) = &config.claude_vertex_project_id {
+            single_line("[claude.vertex] project_id", project_id)?;
+        }
+        if let Some(region) = &config.claude_vertex_region {
+            single_line("[claude.vertex] region", region)?;
+        }
+        single_line("[claude] model", &config.claude_model)?;
+        single_line("[claude] effort", &config.claude_effort)?;
     }
-    if let Some(project_id) = &config.claude_vertex_project_id {
-        single_line("[claude.vertex] project_id", project_id)?;
-    }
-    if let Some(region) = &config.claude_vertex_region {
-        single_line("[claude.vertex] region", region)?;
-    }
-    single_line("[claude] model", &config.claude_model)?;
-    single_line("[claude] effort", &config.claude_effort)?;
 
     for slug in config.base_repos.iter().map(|r| r.slug.as_str()) {
         if !crate::seed::input::is_valid_repo_slug(slug) {
@@ -1461,6 +1478,7 @@ mod tests {
                     api_key: Some("sk-ant-test".to_owned()),
                 },
                 backend: Some(Backend::Anthropic),
+                enabled: None,
                 effort: Some("max".to_owned()),
                 model: Some("claude-opus-4-7".to_owned()),
                 vertex: ClaudeVertexSection::default(),

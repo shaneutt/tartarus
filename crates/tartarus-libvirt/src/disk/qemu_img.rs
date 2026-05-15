@@ -1,7 +1,7 @@
 //! `qemu-img` abstraction.
 //!
 //! Production callers shell out via [`KernelQemuImg`]; tests inject
-//! a [`recorder::Recorder`] to capture invocations and script
+//! a `recorder::Recorder` to capture invocations and script
 //! responses without needing the real binary on `PATH`.
 //!
 //! All three operations Tartarus performs (`create`, `info`,

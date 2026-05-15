@@ -88,9 +88,13 @@ install_claude_if_missing() {
 main() {
     source_env_dir
     authenticate_gh
-    install_claude_if_missing
+    if [[ "${TARTARUS_SKIP_CLAUDE:-}" != "1" ]]; then
+        install_claude_if_missing
+    fi
     clone_repos
-    start_claude_service
+    if [[ "${TARTARUS_SKIP_CLAUDE:-}" != "1" ]]; then
+        start_claude_service
+    fi
     log "bootstrap complete"
 }
 

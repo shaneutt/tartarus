@@ -171,34 +171,36 @@ fn push_bootstrap_user_dropin(out: &mut String, seed: &Seed) {
 fn push_env_files(out: &mut String, seed: &Seed) {
     let owner = format!("{name}:{name}", name = seed.user.username);
 
-    emit_env_file(out, "GITHUB_TOKEN", &seed.credentials.github_token, &owner);
-    emit_env_file(out, "CLAUDE_MODEL", &seed.credentials.claude.model, &owner);
-    emit_env_file(out, "CLAUDE_EFFORT", &seed.credentials.claude.effort, &owner);
+    emit_env_file(out, "GITHUB_TOKEN", &seed.github_token, &owner);
 
-    match &seed.credentials.backend {
-        CredentialBundle::Anthropic { api_key } => {
-            emit_env_file(out, "ANTHROPIC_API_KEY", api_key, &owner);
-        },
-        CredentialBundle::Vertex { project_id, region, .. } => {
-            emit_env_file(out, "CLAUDE_CODE_USE_VERTEX", "1", &owner);
-            emit_env_file(out, "GOOGLE_APPLICATION_CREDENTIALS", VERTEX_CREDS_PATH, &owner);
-            emit_env_file(out, "CLOUD_ML_REGION", region, &owner);
-            emit_env_file(out, "ANTHROPIC_VERTEX_PROJECT_ID", project_id, &owner);
-        },
+    if let Some(claude) = &seed.claude {
+        emit_env_file(out, "CLAUDE_MODEL", &claude.defaults.model, &owner);
+        emit_env_file(out, "CLAUDE_EFFORT", &claude.defaults.effort, &owner);
+
+        match &claude.backend {
+            CredentialBundle::Anthropic { api_key } => {
+                emit_env_file(out, "ANTHROPIC_API_KEY", api_key, &owner);
+            },
+            CredentialBundle::Vertex { project_id, region, .. } => {
+                emit_env_file(out, "CLAUDE_CODE_USE_VERTEX", "1", &owner);
+                emit_env_file(out, "GOOGLE_APPLICATION_CREDENTIALS", VERTEX_CREDS_PATH, &owner);
+                emit_env_file(out, "CLOUD_ML_REGION", region, &owner);
+                emit_env_file(out, "ANTHROPIC_VERTEX_PROJECT_ID", project_id, &owner);
+            },
+        }
+    } else {
+        emit_env_file(out, "TARTARUS_SKIP_CLAUDE", "1", &owner);
     }
 
     if seed.remote_connect {
-        // TODO: replace with the published Claude Code remote-connect env contract.
-        // P6 picks placeholder names so the seam is grep-friendly; the maintainer
-        // swaps `CLAUDE_REMOTE_ENABLED` and the matching token plumbing in
-        // `host::agent` once the feature stabilises.
         emit_env_file(out, "CLAUDE_REMOTE_ENABLED", "1", &owner);
     }
 }
 
 /// Append the Vertex SA JSON file (mode 0600) if applicable.
 fn push_vertex_creds_if_any(out: &mut String, seed: &Seed) {
-    let CredentialBundle::Vertex { credentials_json, .. } = &seed.credentials.backend else {
+    let Some(claude) = &seed.claude else { return };
+    let CredentialBundle::Vertex { credentials_json, .. } = &claude.backend else {
         return;
     };
 
@@ -217,7 +219,7 @@ fn push_repos_manifest(out: &mut String, seed: &Seed) {
     emit_write_file(out, REPOS_MANIFEST_PATH, &body, "0644", &owner);
 }
 
-/// Append `runcmd:` (env-dir prep, Claude install, bootstrap trigger).
+/// Append `runcmd:` (env-dir prep, optional Claude install, bootstrap).
 fn push_runcmd(out: &mut String, seed: &Seed) {
     let home = host_user::home_dir(&seed.user);
     let user = &seed.user.username;
@@ -230,11 +232,13 @@ fn push_runcmd(out: &mut String, seed: &Seed) {
         "  - install -d -o {user} -g {user} {home}/.local\n",
         home = home.display()
     ));
-    out.push_str(&format!(
-        "  - sudo -u {user} -H npm install --prefix={home}/.local {tarball}\n",
-        home = home.display(),
-        tarball = CLAUDE_TARBALL_PATH,
-    ));
+    if seed.claude.is_some() {
+        out.push_str(&format!(
+            "  - sudo -u {user} -H npm install --prefix={home}/.local {tarball}\n",
+            home = home.display(),
+            tarball = CLAUDE_TARBALL_PATH,
+        ));
+    }
     out.push_str("  - systemctl start tartarus-bootstrap.service\n");
 }
 
@@ -273,7 +277,7 @@ mod tests {
     use super::*;
     use crate::{
         host_user::HostUser,
-        seed::input::{ClaudeDefaults, CredentialBundle, Credentials, RepoSpec, Seed},
+        seed::input::{ClaudeCredentials, ClaudeDefaults, CredentialBundle, RepoSpec, Seed},
     };
 
     #[test]
@@ -694,17 +698,17 @@ mod tests {
     fn anthropic_seed(name: &str) -> Seed {
         Seed {
             name: name.to_owned(),
-            credentials: Credentials {
+            claude: Some(ClaudeCredentials {
                 backend: CredentialBundle::Anthropic {
                     api_key: "sk-ant-test".to_owned(),
                 },
-                claude: ClaudeDefaults {
+                defaults: ClaudeDefaults {
                     effort: "high".to_owned(),
                     model: "claude-opus-4-7".to_owned(),
                 },
-                github_token: "ghp_test".to_owned(),
-            },
+            }),
             envs: vec!["rust".to_owned()],
+            github_token: "ghp_test".to_owned(),
             remote_connect: false,
             repos: vec![RepoSpec {
                 slug: "owner/name".to_owned(),
@@ -719,19 +723,19 @@ mod tests {
     fn vertex_seed(credentials_json: &str) -> Seed {
         Seed {
             name: "(unnamed)".to_owned(),
-            credentials: Credentials {
+            claude: Some(ClaudeCredentials {
                 backend: CredentialBundle::Vertex {
                     credentials_json: credentials_json.to_owned(),
                     project_id: "my-project".to_owned(),
                     region: "us-east5".to_owned(),
                 },
-                claude: ClaudeDefaults {
+                defaults: ClaudeDefaults {
                     effort: "high".to_owned(),
                     model: "claude-opus-4-7".to_owned(),
                 },
-                github_token: "ghp_test".to_owned(),
-            },
+            }),
             envs: vec![],
+            github_token: "ghp_test".to_owned(),
             remote_connect: false,
             repos: vec![RepoSpec {
                 slug: "owner/name".to_owned(),

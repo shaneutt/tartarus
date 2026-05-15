@@ -158,7 +158,7 @@ mod tests {
 
     use tartarus_provider::{
         host_user::HostUser,
-        seed::input::{ClaudeDefaults, CredentialBundle, Credentials, RepoSpec, Seed},
+        seed::input::{ClaudeCredentials, ClaudeDefaults, CredentialBundle, RepoSpec, Seed},
     };
 
     use super::*;
@@ -224,17 +224,17 @@ mod tests {
     fn anthropic_seed() -> Seed {
         Seed {
             name: "(unnamed)".to_owned(),
-            credentials: Credentials {
+            claude: Some(ClaudeCredentials {
                 backend: CredentialBundle::Anthropic {
                     api_key: "sk-ant-test".to_owned(),
                 },
-                claude: ClaudeDefaults {
+                defaults: ClaudeDefaults {
                     effort: "high".to_owned(),
                     model: "claude-opus-4-7".to_owned(),
                 },
-                github_token: "ghp_test".to_owned(),
-            },
+            }),
             envs: vec!["rust".to_owned()],
+            github_token: "ghp_test".to_owned(),
             remote_connect: false,
             repos: vec![RepoSpec {
                 slug: "owner/name".to_owned(),
